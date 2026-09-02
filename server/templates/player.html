@@ -3,478 +3,622 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>{{ file_name }} - Stream Bot ⚡</title>
+    <title>{{ file_name }} — Stream Bot</title>
+    <meta name="description" content="Stream or download {{ file_name }} directly at maximum speed with zero buffering.">
     
     <!-- Google Fonts -->
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
     
     <!-- Plyr CSS -->
     <link rel="stylesheet" href="https://cdn.plyr.io/3.7.8/plyr.css" />
 
     <style>
         :root {
-            --bg-primary: #0b0f19;
-            --bg-card: rgba(18, 24, 38, 0.85);
-            --border-color: rgba(255, 255, 255, 0.08);
-            --accent: #3b82f6;
-            --accent-hover: #2563eb;
-            --accent-glow: rgba(59, 130, 246, 0.35);
-            --text-primary: #f8fafc;
-            --text-secondary: #94a3b8;
-            --success: #10b981;
-            --apk-color: #22c55e;
-            --apk-glow: rgba(34, 197, 94, 0.35);
+            --bg-body: #07090e;
+            --surface-1: rgba(15, 21, 37, 0.7);
+            --surface-2: rgba(26, 35, 60, 0.55);
+            --border-glass: rgba(255, 255, 255, 0.09);
+            --border-highlight: rgba(99, 102, 241, 0.25);
+            --accent-primary: #6366f1;
+            --accent-secondary: #8b5cf6;
+            --accent-cyan: #06b6d4;
+            --text-main: #f8fafc;
+            --text-muted: #94a3b8;
+            --text-dim: #64748b;
+            --badge-green: #10b981;
+            --radius-xl: 24px;
+            --radius-lg: 16px;
+            --radius-md: 12px;
+            --plyr-color-main: #6366f1;
+            --plyr-video-background: #000;
         }
 
         * {
             margin: 0;
             padding: 0;
             box-sizing: border-box;
-            font-family: 'Outfit', -apple-system, BlinkMacSystemFont, sans-serif;
+            font-family: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, sans-serif;
         }
 
         body {
-            background-color: var(--bg-primary);
-            background-image: 
-                radial-gradient(at 0% 0%, rgba(59, 130, 246, 0.15) 0px, transparent 50%),
-                radial-gradient(at 100% 100%, rgba(139, 92, 246, 0.12) 0px, transparent 50%);
-            color: var(--text-primary);
+            background-color: var(--bg-body);
+            color: var(--text-main);
             min-height: 100vh;
             display: flex;
             flex-direction: column;
             align-items: center;
-            padding: 24px 16px;
+            padding: 32px 20px 48px;
+            position: relative;
+            overflow-x: hidden;
+        }
+
+        /* Ambient Glow Background */
+        .ambient-glow {
+            position: fixed;
+            top: 0;
+            left: 50%;
+            transform: translateX(-50%);
+            width: 1000px;
+            height: 450px;
+            background: radial-gradient(ellipse 60% 50% at 50% 0%, rgba(99, 102, 241, 0.18), transparent 70%),
+                        radial-gradient(ellipse 40% 40% at 80% 20%, rgba(6, 182, 212, 0.12), transparent 60%);
+            pointer-events: none;
+            z-index: 0;
         }
 
         .container {
             width: 100%;
-            max-width: 960px;
+            max-width: 980px;
             display: flex;
             flex-direction: column;
-            gap: 20px;
+            gap: 24px;
+            position: relative;
+            z-index: 1;
         }
 
-        /* Navbar Header */
+        /* Modern Glass Header */
         .navbar {
             display: flex;
             justify-content: space-between;
             align-items: center;
-            background: var(--bg-card);
-            backdrop-filter: blur(12px);
-            border: 1px solid var(--border-color);
-            border-radius: 16px;
-            padding: 14px 24px;
+            background: var(--surface-1);
+            backdrop-filter: blur(20px);
+            -webkit-backdrop-filter: blur(20px);
+            border: 1px solid var(--border-glass);
+            border-radius: var(--radius-lg);
+            padding: 14px 22px;
+            box-shadow: 0 10px 30px -10px rgba(0, 0, 0, 0.5);
+            transition: border-color 0.25s ease;
+        }
+
+        .navbar:hover {
+            border-color: var(--border-highlight);
         }
 
         .brand {
             display: flex;
             align-items: center;
-            gap: 10px;
-            font-weight: 700;
-            font-size: 1.25rem;
-            color: var(--text-primary);
+            gap: 12px;
             text-decoration: none;
+            color: var(--text-main);
         }
 
-        .brand-icon {
-            background: linear-gradient(135deg, #3b82f6, #8b5cf6);
-            border-radius: 10px;
-            width: 34px;
-            height: 34px;
+        .brand-badge {
+            width: 40px;
+            height: 40px;
+            background: linear-gradient(135deg, var(--accent-primary), var(--accent-secondary));
+            border-radius: 12px;
             display: flex;
             align-items: center;
             justify-content: center;
-            font-size: 1.1rem;
-            box-shadow: 0 4px 12px var(--accent-glow);
+            font-size: 1.25rem;
+            box-shadow: 0 8px 20px -4px rgba(99, 102, 241, 0.5);
+        }
+
+        .brand-meta {
+            display: flex;
+            flex-direction: column;
+        }
+
+        .brand-title {
+            font-size: 1.15rem;
+            font-weight: 800;
+            letter-spacing: -0.02em;
+            background: linear-gradient(135deg, #fff 40%, #cbd5e1 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+
+        .brand-subtitle {
+            font-size: 0.72rem;
+            color: var(--text-dim);
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.06em;
         }
 
         .channel-btn {
             display: flex;
             align-items: center;
-            gap: 6px;
-            background: rgba(59, 130, 246, 0.15);
-            color: #60a5fa;
-            border: 1px solid rgba(59, 130, 246, 0.3);
+            gap: 8px;
+            background: rgba(99, 102, 241, 0.12);
+            color: #818cf8;
+            border: 1px solid rgba(99, 102, 241, 0.28);
             border-radius: 10px;
             padding: 8px 16px;
-            font-size: 0.9rem;
-            font-weight: 500;
+            font-size: 0.85rem;
+            font-weight: 600;
             text-decoration: none;
-            transition: all 0.2s ease;
+            transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
         }
 
         .channel-btn:hover {
-            background: rgba(59, 130, 246, 0.25);
+            background: rgba(99, 102, 241, 0.22);
+            border-color: rgba(99, 102, 241, 0.5);
+            color: #a5b4fc;
             transform: translateY(-1px);
         }
 
-        /* Media / File Display Box */
-        .media-wrapper {
+        /* Player & Media Container */
+        .player-viewport {
             width: 100%;
-            background: #000;
-            border-radius: 20px;
+            background: #020408;
+            border-radius: var(--radius-xl);
             overflow: hidden;
-            border: 1px solid var(--border-color);
-            box-shadow: 0 20px 40px -15px rgba(0, 0, 0, 0.6);
+            border: 1px solid var(--border-glass);
+            box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.8),
+                        0 0 0 1px rgba(255, 255, 255, 0.05);
             display: flex;
             justify-content: center;
             align-items: center;
+            position: relative;
+        }
+
+        .plyr--video {
+            border-radius: var(--radius-xl);
+            width: 100%;
+            aspect-ratio: 16 / 9;
+            background: #000;
         }
 
         .image-preview {
             max-width: 100%;
-            max-height: 70vh;
+            max-height: 75vh;
             object-fit: contain;
-            border-radius: 20px;
-            background: #000;
+            display: block;
         }
 
-        /* Document / APK Download Hero */
-        .document-wrapper {
+        /* Hero view for non-streamable files */
+        .file-hero-box {
             width: 100%;
-            padding: 60px 24px;
-            background: var(--bg-card);
-            border-radius: 20px;
+            padding: 70px 24px;
+            background: linear-gradient(180deg, var(--surface-1) 0%, rgba(10, 15, 28, 0.9) 100%);
+            border-radius: var(--radius-xl);
+            border: 1px solid var(--border-glass);
             display: flex;
             flex-direction: column;
             align-items: center;
             text-align: center;
             gap: 20px;
+            box-shadow: 0 20px 40px -15px rgba(0, 0, 0, 0.6);
         }
 
-        .document-icon-box {
+        .hero-icon-wrapper {
             width: 100px;
             height: 100px;
-            border-radius: 24px;
+            border-radius: 28px;
             display: flex;
             align-items: center;
             justify-content: center;
-            font-size: 3.5rem;
-            box-shadow: 0 10px 25px rgba(0,0,0,0.3);
+            font-size: 3.2rem;
+            position: relative;
         }
 
         .icon-apk {
-            background: linear-gradient(135deg, rgba(34, 197, 94, 0.2), rgba(16, 185, 129, 0.3));
+            background: linear-gradient(135deg, rgba(34, 197, 94, 0.2), rgba(16, 185, 129, 0.28));
             border: 1px solid rgba(34, 197, 94, 0.4);
-            box-shadow: 0 10px 25px var(--apk-glow);
+            box-shadow: 0 12px 30px -5px rgba(34, 197, 94, 0.35);
         }
 
         .icon-archive {
-            background: linear-gradient(135deg, rgba(234, 179, 8, 0.2), rgba(249, 115, 22, 0.3));
+            background: linear-gradient(135deg, rgba(234, 179, 8, 0.2), rgba(249, 115, 22, 0.28));
             border: 1px solid rgba(234, 179, 8, 0.4);
+            box-shadow: 0 12px 30px -5px rgba(234, 179, 8, 0.35);
         }
 
         .icon-doc {
-            background: linear-gradient(135deg, rgba(59, 130, 246, 0.2), rgba(139, 92, 246, 0.3));
-            border: 1px solid rgba(59, 130, 246, 0.4);
+            background: linear-gradient(135deg, rgba(99, 102, 241, 0.2), rgba(139, 92, 246, 0.28));
+            border: 1px solid rgba(99, 102, 241, 0.4);
+            box-shadow: 0 12px 30px -5px rgba(99, 102, 241, 0.35);
         }
 
-        .doc-title {
-            font-size: 1.4rem;
+        .hero-title {
+            font-size: 1.35rem;
             font-weight: 700;
-            color: var(--text-primary);
+            color: var(--text-main);
             max-width: 80%;
-            word-break: break-word;
-        }
-
-        .doc-subtitle {
-            color: var(--text-secondary);
-            font-size: 0.95rem;
-        }
-
-        .audio-wrapper {
-            width: 100%;
-            padding: 40px 24px;
-            background: var(--bg-card);
-            border-radius: 20px;
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-            gap: 20px;
-        }
-
-        .audio-icon {
-            font-size: 3rem;
-            background: rgba(59, 130, 246, 0.15);
-            width: 80px;
-            height: 80px;
-            border-radius: 50%;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-        }
-
-        .plyr {
-            width: 100%;
-            border-radius: 20px;
-            --plyr-color-main: #3b82f6;
-        }
-
-        /* File Info Card */
-        .info-card {
-            background: var(--bg-card);
-            backdrop-filter: blur(12px);
-            border: 1px solid var(--border-color);
-            border-radius: 18px;
-            padding: 24px;
-            display: flex;
-            flex-direction: column;
-            gap: 18px;
-        }
-
-        .file-header {
-            display: flex;
-            justify-content: space-between;
-            align-items: flex-start;
-            gap: 16px;
-            flex-wrap: wrap;
-        }
-
-        .file-title {
-            font-size: 1.25rem;
-            font-weight: 600;
-            color: var(--text-primary);
             word-break: break-word;
             line-height: 1.4;
         }
 
-        .meta-badges {
+        .hero-description {
+            font-size: 0.92rem;
+            color: var(--text-muted);
+        }
+
+        /* Audio Player Box */
+        .audio-container {
+            width: 100%;
+            padding: 48px 32px;
+            background: var(--surface-1);
+            border-radius: var(--radius-xl);
+            border: 1px solid var(--border-glass);
             display: flex;
-            gap: 8px;
-            flex-wrap: wrap;
-            margin-top: 8px;
+            flex-direction: column;
+            align-items: center;
+            gap: 24px;
         }
 
-        .badge {
-            background: rgba(255, 255, 255, 0.06);
-            border: 1px solid var(--border-color);
-            border-radius: 8px;
-            padding: 4px 10px;
-            font-size: 0.82rem;
-            color: var(--text-secondary);
-            font-weight: 500;
+        .audio-disc {
+            width: 88px;
+            height: 88px;
+            border-radius: 50%;
+            background: linear-gradient(135deg, #6366f1, #06b6d4);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 2.2rem;
+            box-shadow: 0 10px 30px -6px rgba(99, 102, 241, 0.45);
+            animation: pulse-slow 3s infinite ease-in-out;
         }
 
-        .badge-size {
-            background: rgba(16, 185, 129, 0.15);
-            color: #34d399;
-            border-color: rgba(16, 185, 129, 0.25);
+        @keyframes pulse-slow {
+            0%, 100% { transform: scale(1); }
+            50% { transform: scale(1.04); }
         }
 
-        .badge-apk {
-            background: rgba(34, 197, 94, 0.15);
-            color: #4ade80;
-            border-color: rgba(34, 197, 94, 0.25);
+        /* File Information & Action Card */
+        .info-panel {
+            background: var(--surface-1);
+            backdrop-filter: blur(20px);
+            -webkit-backdrop-filter: blur(20px);
+            border: 1px solid var(--border-glass);
+            border-radius: var(--radius-xl);
+            padding: 28px;
+            display: flex;
+            flex-direction: column;
+            gap: 24px;
+            box-shadow: 0 15px 35px -10px rgba(0, 0, 0, 0.4);
         }
 
-        /* Action Buttons */
-        .actions-grid {
-            display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+        .file-header {
+            display: flex;
+            flex-direction: column;
             gap: 12px;
         }
 
+        .file-name {
+            font-size: 1.35rem;
+            font-weight: 700;
+            color: var(--text-main);
+            word-break: break-word;
+            line-height: 1.4;
+            letter-spacing: -0.01em;
+        }
+
+        .badges-row {
+            display: flex;
+            gap: 8px;
+            flex-wrap: wrap;
+            align-items: center;
+        }
+
+        .chip {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            padding: 5px 12px;
+            border-radius: 8px;
+            font-size: 0.82rem;
+            font-weight: 600;
+            background: rgba(255, 255, 255, 0.05);
+            border: 1px solid rgba(255, 255, 255, 0.08);
+            color: var(--text-muted);
+        }
+
+        .chip-size {
+            background: rgba(16, 185, 129, 0.12);
+            color: #34d399;
+            border-color: rgba(16, 185, 129, 0.28);
+        }
+
+        .chip-format {
+            background: rgba(99, 102, 241, 0.12);
+            color: #a5b4fc;
+            border-color: rgba(99, 102, 241, 0.28);
+        }
+
+        .chip-speed {
+            background: rgba(6, 182, 212, 0.1);
+            color: #67e8f9;
+            border-color: rgba(6, 182, 212, 0.25);
+        }
+
+        /* Modern Grid Action Buttons */
+        .action-row {
+            display: grid;
+            grid-template-columns: 2fr 1fr;
+            gap: 14px;
+        }
+
+        @media (max-width: 640px) {
+            .action-row {
+                grid-template-columns: 1fr;
+            }
+        }
+
         .btn {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            gap: 10px;
+            padding: 14px 24px;
+            border-radius: var(--radius-md);
+            font-size: 0.98rem;
+            font-weight: 700;
+            text-decoration: none;
+            cursor: pointer;
+            border: none;
+            transition: all 0.22s cubic-bezier(0.16, 1, 0.3, 1);
+            position: relative;
+            overflow: hidden;
+        }
+
+        .btn-download {
+            background: linear-gradient(135deg, #4f46e5 0%, #6366f1 50%, #8b5cf6 100%);
+            color: #ffffff;
+            box-shadow: 0 10px 25px -5px rgba(99, 102, 241, 0.5),
+                        inset 0 1px 0 rgba(255, 255, 255, 0.25);
+        }
+
+        .btn-download:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 14px 30px -4px rgba(99, 102, 241, 0.65);
+        }
+
+        .btn-copy {
+            background: rgba(255, 255, 255, 0.05);
+            color: var(--text-main);
+            border: 1px solid var(--border-glass);
+        }
+
+        .btn-copy:hover {
+            background: rgba(255, 255, 255, 0.09);
+            border-color: rgba(255, 255, 255, 0.18);
+            transform: translateY(-2px);
+        }
+
+        .btn:active {
+            transform: translateY(0);
+        }
+
+        /* Direct URL Quick Access Bar */
+        .link-box {
+            display: flex;
+            align-items: center;
+            background: rgba(0, 0, 0, 0.35);
+            border: 1px solid rgba(255, 255, 255, 0.06);
+            border-radius: 10px;
+            padding: 10px 14px;
+            gap: 12px;
+        }
+
+        .link-text {
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 0.82rem;
+            color: var(--text-dim);
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+            flex-grow: 1;
+        }
+
+        .link-copy-icon {
+            cursor: pointer;
+            color: var(--text-muted);
+            font-size: 0.9rem;
+            transition: color 0.15s ease;
+            background: none;
+            border: none;
+            display: flex;
+            align-items: center;
+            padding: 4px;
+        }
+
+        .link-copy-icon:hover {
+            color: #fff;
+        }
+
+        /* Clean Minimal Footer */
+        .footer {
             display: flex;
             align-items: center;
             justify-content: center;
             gap: 8px;
-            padding: 12px 20px;
-            border-radius: 12px;
-            font-size: 0.95rem;
-            font-weight: 600;
-            cursor: pointer;
-            text-decoration: none;
-            transition: all 0.2s ease;
-            border: none;
+            font-size: 0.82rem;
+            color: var(--text-dim);
+            margin-top: 12px;
         }
 
-        .btn-primary {
-            background: linear-gradient(135deg, var(--accent), #2563eb);
-            color: #fff;
-            box-shadow: 0 4px 14px var(--accent-glow);
+        .footer span.dot {
+            width: 4px;
+            height: 4px;
+            background: var(--text-dim);
+            border-radius: 50%;
         }
 
-        .btn-apk {
-            background: linear-gradient(135deg, #16a34a, #15803d);
-            color: #fff;
-            box-shadow: 0 4px 14px var(--apk-glow);
-        }
-
-        .btn-primary:hover, .btn-apk:hover {
-            opacity: 0.95;
-            transform: translateY(-2px);
-        }
-
-        .btn-secondary {
-            background: rgba(255, 255, 255, 0.06);
-            border: 1px solid var(--border-color);
-            color: var(--text-primary);
-        }
-
-        .btn-secondary:hover {
-            background: rgba(255, 255, 255, 0.1);
-            transform: translateY(-2px);
-        }
-
-        .btn-vlc {
-            background: rgba(249, 115, 22, 0.15);
-            border: 1px solid rgba(249, 115, 22, 0.3);
-            color: #fb923c;
-        }
-
-        .btn-vlc:hover {
-            background: rgba(249, 115, 22, 0.25);
-            transform: translateY(-2px);
-        }
-
-        /* Footer */
-        .footer {
-            margin-top: auto;
-            padding-top: 24px;
-            text-align: center;
-            font-size: 0.85rem;
-            color: var(--text-secondary);
-        }
-
-        .footer a {
-            color: #60a5fa;
-            text-decoration: none;
-        }
-
+        /* Modern Floating Toast Notification */
         .toast {
             position: fixed;
-            bottom: 24px;
-            background: #10b981;
+            bottom: 30px;
+            background: rgba(15, 23, 42, 0.9);
+            border: 1px solid rgba(99, 102, 241, 0.4);
             color: #fff;
-            padding: 10px 20px;
-            border-radius: 10px;
-            font-weight: 500;
-            box-shadow: 0 6px 16px rgba(0,0,0,0.3);
+            padding: 12px 22px;
+            border-radius: 12px;
+            font-size: 0.9rem;
+            font-weight: 600;
+            box-shadow: 0 12px 30px rgba(0, 0, 0, 0.6), 0 0 20px rgba(99, 102, 241, 0.2);
+            backdrop-filter: blur(16px);
             opacity: 0;
-            transition: opacity 0.3s ease;
+            transform: translateY(15px);
+            transition: all 0.25s cubic-bezier(0.16, 1, 0.3, 1);
             pointer-events: none;
-            z-index: 100;
+            z-index: 1000;
+            display: flex;
+            align-items: center;
+            gap: 8px;
         }
+
         .toast.show {
             opacity: 1;
+            transform: translateY(0);
         }
     </style>
 </head>
 <body>
+    <div class="ambient-glow"></div>
+
     <div class="container">
-        <!-- Header -->
+        <!-- Navigation Bar -->
         <nav class="navbar">
             <a href="/" class="brand">
-                <span class="brand-icon">⚡</span>
-                <span>Stream Bot</span>
+                <div class="brand-badge">⚡</div>
+                <div class="brand-meta">
+                    <span class="brand-title">Stream Bot</span>
+                    <span class="brand-subtitle">High-Speed Streaming</span>
+                </div>
             </a>
             {% if updates_channel %}
-            <a href="https://t.me/{{ updates_channel | replace('@', '') }}" target="_blank" class="channel-btn">
-                <span>🛠 {{ updates_channel }}</span>
+            <a href="https://t.me/{{ updates_channel | replace('@', '') }}" target="_blank" rel="noopener" class="channel-btn">
+                <span>📢 {{ updates_channel }}</span>
             </a>
             {% endif %}
         </nav>
 
-
-        <!-- Media Display -->
-        <div class="media-wrapper">
+        <!-- Media & Player Viewport -->
+        <div class="player-viewport">
             {% if mime_type.startswith('image/') %}
                 <!-- Image Viewer -->
                 <img src="{{ raw_stream_url }}" alt="{{ file_name }}" class="image-preview" loading="lazy" />
             {% elif mime_type.startswith('audio/') %}
-                <!-- Audio Player -->
-                <div class="audio-wrapper">
-                    <div class="audio-icon">🎵</div>
-                    <audio id="player" playsinline controls preload="metadata">
+                <!-- Modern Audio Player -->
+                <div class="audio-container">
+                    <div class="audio-disc">🎵</div>
+                    <audio id="player" playsinline controls preload="metadata" style="width: 100%;">
                         <source src="{{ raw_stream_url }}" type="{{ mime_type }}">
                         Your browser does not support audio playback.
                     </audio>
                 </div>
             {% elif mime_type.startswith('video/') or file_name.endswith(('.mp4', '.mkv', '.webm', '.avi', '.mov', '.flv')) %}
-                <!-- Video Player -->
+                <!-- Custom Plyr Video Player -->
                 <video id="player" playsinline controls preload="metadata">
                     <source src="{{ raw_stream_url }}" type="{{ mime_type }}">
                     Your browser does not support video streaming.
                 </video>
             {% elif 'package-archive' in mime_type or file_name.endswith('.apk') %}
-                <!-- Android APK Download Hub -->
-                <div class="document-wrapper">
-                    <div class="document-icon-box icon-apk">🤖</div>
-                    <div class="doc-title">{{ file_name }}</div>
-                    <div class="doc-subtitle">Android Application Package (APK) • Direct High-Speed Download</div>
+                <!-- Android APK Hub -->
+                <div class="file-hero-box">
+                    <div class="hero-icon-wrapper icon-apk">📱</div>
+                    <h2 class="hero-title">{{ file_name }}</h2>
+                    <p class="hero-description">Android Application Package • Instant Direct Download</p>
                 </div>
             {% elif 'zip' in mime_type or 'rar' in mime_type or file_name.endswith(('.zip', '.rar', '.7z', '.tar', '.gz')) %}
-                <!-- Archive Download Hub -->
-                <div class="document-wrapper">
-                    <div class="document-icon-box icon-archive">🗜️</div>
-                    <div class="doc-title">{{ file_name }}</div>
-                    <div class="doc-subtitle">Compressed Archive • Direct High-Speed Download</div>
+                <!-- Archive Hub -->
+                <div class="file-hero-box">
+                    <div class="hero-icon-wrapper icon-archive">🗜️</div>
+                    <h2 class="hero-title">{{ file_name }}</h2>
+                    <p class="hero-description">Compressed Archive • High-Speed Direct Download</p>
                 </div>
             {% else %}
                 <!-- Generic Document Hub -->
-                <div class="document-wrapper">
-                    <div class="document-icon-box icon-doc">📄</div>
-                    <div class="doc-title">{{ file_name }}</div>
-                    <div class="doc-subtitle">Document / File • Direct High-Speed Download</div>
+                <div class="file-hero-box">
+                    <div class="hero-icon-wrapper icon-doc">📄</div>
+                    <h2 class="hero-title">{{ file_name }}</h2>
+                    <p class="hero-description">Document & File • High-Speed Direct Download</p>
                 </div>
             {% endif %}
         </div>
 
-        <!-- File Details Card -->
-        <div class="info-card">
+        <!-- Information & Actions Card -->
+        <div class="info-panel">
             <div class="file-header">
-                <div>
-                    <h1 class="file-title">{{ file_name }}</h1>
-                    <div class="meta-badges">
-                        <span class="badge badge-size">📦 {{ formatted_size }}</span>
-                        {% if 'package-archive' in mime_type or file_name.endswith('.apk') %}
-                            <span class="badge badge-apk">📱 Android App</span>
-                        {% elif mime_type.startswith('image/') %}
-                            <span class="badge">🖼️ Image</span>
-                        {% elif mime_type.startswith('video/') or file_name.endswith(('.mp4', '.mkv', '.webm', '.avi')) %}
-                            <span class="badge">🎬 Video Stream</span>
-                        {% elif mime_type.startswith('audio/') %}
-                            <span class="badge">🎵 Audio Stream</span>
-                        {% else %}
-                            <span class="badge">📁 Document</span>
-                        {% endif %}
-                        <span class="badge">{{ mime_type }}</span>
-                    </div>
+                <h1 class="file-name">{{ file_name }}</h1>
+                <div class="badges-row">
+                    <span class="chip chip-size">📦 {{ formatted_size }}</span>
+                    {% if 'package-archive' in mime_type or file_name.endswith('.apk') %}
+                        <span class="chip">📱 Android App</span>
+                    {% elif mime_type.startswith('image/') %}
+                        <span class="chip">🖼️ Image</span>
+                    {% elif mime_type.startswith('video/') or file_name.endswith(('.mp4', '.mkv', '.webm', '.avi')) %}
+                        <span class="chip chip-format">🎬 Video</span>
+                    {% elif mime_type.startswith('audio/') %}
+                        <span class="chip chip-format">🎵 Audio</span>
+                    {% else %}
+                        <span class="chip">📁 Document</span>
+                    {% endif %}
+                    <span class="chip chip-speed">⚡ Multi-Bot Accelerated</span>
                 </div>
             </div>
 
-            <!-- Action Buttons -->
-            <div class="actions-grid">
-                {% if 'package-archive' in mime_type or file_name.endswith('.apk') %}
-                <a href="{{ download_url }}" class="btn btn-apk" download>
-                    <span>📥 Download APK ({{ formatted_size }})</span>
+            <!-- Primary Action Buttons (VLC Removed) -->
+            <div class="action-row">
+                <a href="{{ download_url }}" class="btn btn-download" download>
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+                        <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+                        <polyline points="7 10 12 15 17 10"></polyline>
+                        <line x1="12" y1="15" x2="12" y2="3"></line>
+                    </svg>
+                    <span>Download File ({{ formatted_size }})</span>
                 </a>
-                {% else %}
-                <a href="{{ download_url }}" class="btn btn-primary" download>
-                    <span>🚀 Download Now</span>
-                </a>
-                {% endif %}
-                <button onclick="copyStreamLink()" class="btn btn-secondary">
-                    <span>📋 Copy Download Link</span>
+                <button onclick="copyDownloadUrl()" class="btn btn-copy" title="Copy direct download link">
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
+                        <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
+                    </svg>
+                    <span>Copy Link</span>
                 </button>
-                {% if mime_type.startswith('video/') or mime_type.startswith('audio/') or file_name.endswith(('.mp4', '.mkv', '.webm', '.avi', '.mp3', '.m4a')) %}
-                <a href="vlc://{{ raw_stream_url }}" class="btn btn-vlc">
-                    <span>📺 Open in VLC</span>
-                </a>
-                {% endif %}
+            </div>
+
+            <!-- Quick Direct Link Preview -->
+            <div class="link-box">
+                <span class="link-text" id="directLinkPreview">{{ download_url }}</span>
+                <button onclick="copyDownloadUrl()" class="link-copy-icon" aria-label="Copy Link">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
+                        <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
+                    </svg>
+                </button>
             </div>
         </div>
 
         <!-- Footer -->
-        <div class="footer">
-            Powered by <strong>Stream Bot ⚡</strong> | Fast MTProto Edge Streaming
-        </div>
+        <footer class="footer">
+            <span>Stream Bot ⚡</span>
+            <span class="dot"></span>
+            <span>Ultra-Fast MTProto Edge Streaming</span>
+        </footer>
     </div>
 
-    <div id="toast" class="toast">Link copied to clipboard!</div>
+    <!-- Toast Component -->
+    <div id="toast" class="toast">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#34d399" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+            <polyline points="20 6 9 17 4 12"></polyline>
+        </svg>
+        <span>Link copied to clipboard!</span>
+    </div>
 
     <!-- Plyr JS -->
     <script src="https://cdn.plyr.io/3.7.8/plyr.js"></script>
@@ -493,11 +637,11 @@
             }
         });
 
-        function copyStreamLink() {
+        function copyDownloadUrl() {
             navigator.clipboard.writeText("{{ download_url }}").then(() => {
                 const toast = document.getElementById('toast');
                 toast.classList.add('show');
-                setTimeout(() => toast.classList.remove('show'), 2000);
+                setTimeout(() => toast.classList.remove('show'), 2200);
             });
         }
     </script>
