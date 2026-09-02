@@ -1,3 +1,4 @@
+import asyncio
 import logging
 import urllib.parse
 from pathlib import Path
@@ -98,7 +99,7 @@ async def watch_player_route(request: web.Request) -> web.Response:
 
     public_base = Config.get_public_url()
     raw_stream_url = f"{public_base}/{file_hash}?stream=1"
-    download_url = f"{public_base}/{file_hash}"
+    download_url = f"{public_base}/{file_hash}?download=1"
     import datetime
     created_ts = file_info.get("created_at") or 0
     uploaded_date = datetime.datetime.fromtimestamp(created_ts, tz=datetime.timezone.utc).strftime("%b %d, %Y • %H:%M UTC") if created_ts else "Recent"
@@ -122,8 +123,8 @@ async def watch_player_route(request: web.Request) -> web.Response:
 
 async def stream_download_route(request: web.Request) -> web.StreamResponse:
     file_hash = request.match_info.get("file_hash", "").strip()
-    if not file_hash:
-        raise web.HTTPBadRequest(text="Missing file hash")
+    if not file_hash or file_hash in ("favicon.ico", "robots.txt", "healthz", "ping"):
+        raise web.HTTPNotFound()
 
     file_info = await get_or_recover_file(file_hash)
     if not file_info:
@@ -159,15 +160,17 @@ async def stream_download_route(request: web.Request) -> web.StreamResponse:
 
     content_length = (end_byte - start_byte) + 1
     safe_filename = urllib.parse.quote(file_name)
+    clean_filename = file_name.replace('"', '\\"').replace('\r', '').replace('\n', '')
 
-    is_stream_request = request.query.get("stream") == "1" or is_range or "video" in mime_type or "audio" in mime_type
-    disposition = "inline" if is_stream_request else "attachment"
+    is_download_request = request.query.get("download") == "1"
+    is_stream_request = (request.query.get("stream") == "1" or is_range or "video" in mime_type or "audio" in mime_type) and not is_download_request
+    disposition = "attachment" if is_download_request else ("inline" if is_stream_request else "attachment")
 
     headers = {
         "Content-Type": mime_type,
         "Accept-Ranges": "bytes",
         "Content-Length": str(content_length),
-        "Content-Disposition": f'{disposition}; filename="{file_name}"; filename*=UTF-8\'\'{safe_filename}',
+        "Content-Disposition": f'{disposition}; filename="{clean_filename}"; filename*=UTF-8\'\'{safe_filename}',
         "Access-Control-Allow-Origin": "*",
         "Access-Control-Allow-Headers": "Range, Content-Type",
         "Access-Control-Expose-Headers": "Content-Range, Content-Length, Accept-Ranges",
@@ -182,6 +185,10 @@ async def stream_download_route(request: web.Request) -> web.StreamResponse:
 
     response = web.StreamResponse(status=status_code, headers=headers)
     await response.prepare(request)
+
+    # If HEAD request (e.g. IDM / curl -I / aria2 checking file info), return headers immediately
+    if request.method == "HEAD":
+        return response
 
     # Track download/stream in background
     if start_byte == 0:
@@ -198,8 +205,8 @@ async def stream_download_route(request: web.Request) -> web.StreamResponse:
             await response.write(chunk)
 
         await response.write_eof()
-    except (ConnectionResetError, web.HTTPException):
-        # Client aborted playback or disconnected
+    except (ConnectionResetError, web.HTTPException, asyncio.CancelledError):
+        # Client aborted playback, scrubbed video, or disconnected
         pass
     except Exception as e:
         logger.error(f"Error while streaming response: {e}")
@@ -207,9 +214,15 @@ async def stream_download_route(request: web.Request) -> web.StreamResponse:
     return response
 
 
+async def static_noop_route(request: web.Request) -> web.Response:
+    return web.Response(status=204)
+
+
 def setup_routes(app: web.Application):
     app.router.add_get("/", home_route)
     app.router.add_get("/status", status_route)
+    app.router.add_get("/favicon.ico", static_noop_route)
+    app.router.add_get("/robots.txt", static_noop_route)
     app.router.add_get("/watch/{file_hash}", watch_player_route)
-    app.router.add_get("/{file_hash}", stream_download_route)
+    app.router.add_route("*", "/{file_hash}", stream_download_route)
 

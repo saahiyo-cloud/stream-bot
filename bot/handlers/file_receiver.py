@@ -73,7 +73,7 @@ async def media_file_handler(client: Client, message: Message):
 
         base_url = Config.get_public_url()
         stream_url = f"{base_url}/watch/{file_hash}"
-        download_url = f"{base_url}/{file_hash}"
+        download_url = f"{base_url}/{file_hash}?download=1"
         formatted_size = human_readable_size(file_size)
         category_label = CATEGORY_EMOJIS.get(category, "📁 File")
 

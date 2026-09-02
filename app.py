@@ -2,6 +2,7 @@ import asyncio
 import logging
 import sys
 import os
+import signal
 
 # Ensure explicit asyncio event loop is set before importing hydrogram
 try:
@@ -21,7 +22,14 @@ logging.basicConfig(
     format="[%(asctime)s - %(levelname)s - %(name)s] %(message)s",
     datefmt="%Y-%m-%d %H:%M:%S"
 )
-logger = logging.getLogger("HF-Main")
+logger = logging.getLogger("StreamBot")
+
+stop_event = asyncio.Event()
+
+
+def _signal_handler():
+    logger.info("Shutdown signal received. Initiating graceful shutdown...")
+    stop_event.set()
 
 
 async def main():
@@ -31,8 +39,8 @@ async def main():
     logger.info("Starting Telegram MTProto Stream Bot...")
     await bot.start()
 
-    port = int(os.getenv("PORT", "7860") or 7860)
-    bind_address = "0.0.0.0"
+    port = Config.PORT
+    bind_address = Config.BIND_ADDRESS
 
     logger.info(f"Starting async aiohttp streaming server on {bind_address}:{port}...")
     app = web.Application(client_max_size=1024 * 1024 * 10)
@@ -52,9 +60,26 @@ async def main():
     logger.info(f"📦 Storage Channel: {Config.BIN_CHANNEL}")
     logger.info("=" * 60)
 
-    # Keep running forever
-    while True:
-        await asyncio.sleep(3600)
+    # Register OS signals for graceful shutdown on Docker / Linux
+    current_loop = asyncio.get_running_loop()
+    for sig in (getattr(signal, "SIGTERM", None), getattr(signal, "SIGINT", None)):
+        if sig is not None:
+            try:
+                current_loop.add_signal_handler(sig, _signal_handler)
+            except (NotImplementedError, RuntimeError):
+                # Windows event loop doesn't support add_signal_handler
+                pass
+
+    try:
+        await stop_event.wait()
+    except (asyncio.CancelledError, KeyboardInterrupt):
+        pass
+    finally:
+        logger.info("Stopping aiohttp web server...")
+        await runner.cleanup()
+        logger.info("Stopping Telegram bot clients...")
+        await bot.stop()
+        logger.info("Graceful shutdown complete.")
 
 
 if __name__ == "__main__":
