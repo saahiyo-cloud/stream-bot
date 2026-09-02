@@ -1,0 +1,18 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.session
+*.session-journal
+*.db
+stream_bot.db
+.env
+
+# Node & Build artifacts
+node_modules/
+dist/
+.wrangler/
+
+# System
+.DS_Store
+Thumbs.db

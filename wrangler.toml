@@ -1,0 +1,17 @@
+name = "dl"
+main = "src/index.ts"
+compatibility_date = "2024-04-05"
+
+# Environment Variables
+[vars]
+BOT_TOKEN = "8903766051:AAFoaxItE4t8tTDld2VPvQliurHAL24fIzk"
+API_ID = "36818500"
+API_HASH = "2be9ab61d199c2e7a09c29c2d866f84d"
+BIN_CHANNEL = ""
+UPDATES_CHANNEL = ""
+HASH_PREFIX = "stream-"
+
+# Cloudflare KV Storage Binding
+[[kv_namespaces]]
+binding = "STREAM_KV"
+id = "fd37cb882fbb4f7a9ab7bc148b9b85c9"

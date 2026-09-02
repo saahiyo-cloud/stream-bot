@@ -1,0 +1,6 @@
+name = "stream-bot-proxy"
+main = "worker.js"
+compatibility_date = "2024-01-01"
+
+[vars]
+BACKEND_ORIGIN = "https://YOUR_BACKEND_SERVER_URL"
