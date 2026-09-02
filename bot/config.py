@@ -20,6 +20,7 @@ class Config:
     API_ID = _get_int("API_ID", 0)
     API_HASH = os.getenv("API_HASH", "").strip().strip('"\'')
     BOT_TOKEN = os.getenv("BOT_TOKEN", "").strip().strip('"\'')
+    SESSION_STRING = os.getenv("SESSION_STRING", "").strip().strip('"\'')
 
     # Multi-client worker tokens (comma-separated list for load balancing)
     MULTI_TOKENS = [

@@ -1,6 +1,7 @@
 import logging
 import asyncio
 from hydrogram import Client
+from hydrogram.errors import FloodWait
 from bot.config import Config
 
 logger = logging.getLogger(__name__)
@@ -20,6 +21,7 @@ class StreamBot(Client):
             api_id=Config.API_ID,
             api_hash=Config.API_HASH,
             bot_token=Config.BOT_TOKEN,
+            session_string=Config.SESSION_STRING if Config.SESSION_STRING else None,
             plugins=dict(root="bot/handlers"),
             sleep_threshold=15,
             workers=32
@@ -31,10 +33,26 @@ class StreamBot(Client):
 
     async def start(self):
         logger.info("Starting primary Telegram bot client...")
-        await super().start()
+        while True:
+            try:
+                await super().start()
+                break
+            except FloodWait as e:
+                logger.warning(f"Telegram login FloodWait: sleeping {e.value + 2} seconds to satisfy Telegram cooldown...")
+                await asyncio.sleep(e.value + 2)
+
         self.me = await self.get_me()
         self.username = self.me.username
         logger.info(f"Bot started successfully as @{self.username} (ID: {self.me.id})")
+
+        # Export session string for persistent zero-cooldown logins across redeployments
+        if not Config.SESSION_STRING:
+            try:
+                exported = await self.export_session_string()
+                logger.info(f"💡 SESSION_STRING generated: {exported}")
+                logger.info("   Add SESSION_STRING to Railway Variables to eliminate login cooldowns permanently.")
+            except Exception as exp_err:
+                logger.debug(f"Could not export session: {exp_err}")
 
         # Initialize secondary worker clients for load-balancing chunk streaming
         if Config.MULTI_TOKENS:
@@ -50,7 +68,14 @@ class StreamBot(Client):
                         sleep_threshold=15,
                         workers=16
                     )
-                    await worker.start()
+                    while True:
+                        try:
+                            await worker.start()
+                            break
+                        except FloodWait as fe:
+                            logger.warning(f"Worker {idx} login FloodWait: sleeping {fe.value + 2}s...")
+                            await asyncio.sleep(fe.value + 2)
+
                     worker_me = await worker.get_me()
                     self.worker_clients.append(worker)
                     logger.info(f"Worker {idx} initialized as @{worker_me.username}")
