@@ -149,10 +149,10 @@
             position: relative;
             z-index: 10;
             width: 100%;
-            max-width: 1160px;
+            max-width: 900px;
             display: flex;
             flex-direction: column;
-            gap: 24px;
+            gap: 20px;
         }
 
         /* -------------------------------------------------------------
@@ -293,21 +293,28 @@
         }
 
         .viewport-core {
-            min-height: 440px;
+            max-height: min(480px, 55vh);
             background: #000000;
             display: flex;
             align-items: center;
             justify-content: center;
             position: relative;
+            overflow: hidden;
         }
 
         /* Plyr Customization Overrides */
         .plyr {
             width: 100%;
-            height: 100%;
+            height: auto;
+            max-height: min(480px, 55vh);
             border-radius: var(--radius-inner-xl);
             --plyr-video-control-background-hover: rgba(6, 182, 212, 0.9);
             --plyr-control-radius: 8px;
+        }
+
+        .plyr video {
+            max-height: min(480px, 55vh);
+            object-fit: contain;
         }
 
         .plyr--video {
@@ -318,17 +325,17 @@
         /* Audio Player Presentation */
         .audio-stage {
             width: 100%;
-            padding: 64px 32px;
+            padding: 40px 24px;
             display: flex;
             flex-direction: column;
             align-items: center;
-            gap: 28px;
+            gap: 20px;
             background: radial-gradient(circle at center, rgba(30, 41, 75, 0.6) 0%, rgba(5, 7, 13, 0.9) 100%);
         }
 
         .audio-disc-disc {
-            width: 96px;
-            height: 96px;
+            width: 80px;
+            height: 80px;
             border-radius: 50%;
             background: linear-gradient(135deg, #1e293b, #0f172a);
             border: 2px solid rgba(255, 255, 255, 0.12);
@@ -341,30 +348,34 @@
 
         .audio-disc-disc::after {
             content: '';
-            width: 24px;
-            height: 24px;
+            width: 20px;
+            height: 20px;
             border-radius: 50%;
             background: #06b6d4;
             box-shadow: 0 0 16px #06b6d4;
         }
 
-        /* Image Display */
+        /* Image Display - Perfectly proportioned and non-overflowing */
         .image-display {
             max-width: 100%;
-            max-height: 720px;
+            max-height: min(460px, 50vh);
+            width: auto;
+            height: auto;
             object-fit: contain;
             display: block;
             margin: 0 auto;
+            padding: 10px;
+            border-radius: var(--radius-inner-xl);
         }
 
         /* Document / Non-Streamable Hero Display */
         .document-hero {
-            padding: 80px 32px;
+            padding: 48px 24px;
             display: flex;
             flex-direction: column;
             align-items: center;
             text-align: center;
-            gap: 20px;
+            gap: 16px;
             background: radial-gradient(circle at center, rgba(26, 35, 60, 0.45) 0%, rgba(5, 7, 13, 0.95) 100%);
         }
 
