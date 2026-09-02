@@ -5,7 +5,7 @@ load_dotenv()
 
 
 class Config:
-    # Telegram API Credentials (with defaults for cloud runners)
+    # Telegram API Credentials
     API_ID = int(os.getenv("API_ID", "36818500") or 36818500)
     API_HASH = os.getenv("API_HASH", "2be9ab61d199c2e7a09c29c2d866f84d") or "2be9ab61d199c2e7a09c29c2d866f84d"
     BOT_TOKEN = os.getenv("BOT_TOKEN", "8903766051:AAFoaxItE4t8tTDld2VPvQliurHAL24fIzk") or "8903766051:AAFoaxItE4t8tTDld2VPvQliurHAL24fIzk"
@@ -25,11 +25,11 @@ class Config:
     PORT = int(os.getenv("PORT", "7860") or 7860)
     BIND_ADDRESS = os.getenv("BIND_ADDRESS", "0.0.0.0")
 
-    # Public URLs for Link Generation
+    # Public URLs for Link Generation (Hugging Face 24/7 direct origin)
     SERVER_URL = os.getenv("SERVER_URL", "https://saahiyo-stream-bot.hf.space").rstrip("/")
-    WORKER_URL = os.getenv("WORKER_URL", "https://dl.shakir-ansarii075.workers.dev").rstrip("/")
+    WORKER_URL = os.getenv("WORKER_URL", "https://saahiyo-stream-bot.hf.space").rstrip("/")
 
-    # The effective public base URL shown to users (Worker URL takes precedence if configured)
+    # The effective public base URL shown to users
     @classmethod
     def get_public_url(cls):
         return cls.WORKER_URL if cls.WORKER_URL else cls.SERVER_URL
