@@ -85,19 +85,24 @@ async def stream_download_route(request: web.Request) -> web.StreamResponse:
     range_header = request.headers.get("Range")
     start_byte, end_byte, is_range = parse_range_header(range_header, file_size)
 
-    # Fetch Telegram message from storage channel / chat
+    # Get worker client from pool for load balancing
+    stream_client = bot.get_stream_client()
+
+    # Fetch Telegram message directly using the stream_client that will read the bytes
     chat_id = Config.BIN_CHANNEL if Config.BIN_CHANNEL != 0 else file_info["user_id"]
     try:
-        msg = await bot.get_messages(chat_id=chat_id, message_ids=message_id)
+        msg = await stream_client.get_messages(chat_id=chat_id, message_ids=message_id)
     except Exception as e:
-        logger.error(f"Failed to fetch Telegram message {message_id}: {e}")
-        raise web.HTTPInternalServerError(text="Failed to fetch media from Telegram storage.")
+        logger.warning(f"Worker client failed to fetch message {message_id}: {e}. Retrying with primary bot...")
+        try:
+            msg = await bot.get_messages(chat_id=chat_id, message_ids=message_id)
+            stream_client = bot
+        except Exception as e2:
+            logger.error(f"Failed to fetch Telegram message {message_id}: {e2}")
+            raise web.HTTPInternalServerError(text="Failed to fetch media from Telegram storage.")
 
     if not msg:
         raise web.HTTPNotFound(text="Media message not found in Telegram storage.")
-
-    # Get worker client from pool for load balancing
-    stream_client = bot.get_stream_client()
 
     content_length = (end_byte - start_byte) + 1
     safe_filename = urllib.parse.quote(file_name)
