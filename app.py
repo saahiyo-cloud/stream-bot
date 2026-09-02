@@ -8,6 +8,15 @@ from fastapi.responses import HTMLResponse, JSONResponse, StreamingResponse
 import gradio as gr
 from jinja2 import Environment, FileSystemLoader
 
+# Support for Hugging Face ZeroGPU / Spaces environment
+try:
+    import spaces
+    @spaces.GPU
+    def _hf_spaces_watchdog():
+        return True
+except Exception:
+    pass
+
 # Set up event loop before importing hydrogram
 try:
     _loop = asyncio.get_event_loop()
@@ -26,7 +35,7 @@ logging.basicConfig(
     format="[%(asctime)s - %(levelname)s - %(name)s] %(message)s",
     datefmt="%Y-%m-%d %H:%M:%S"
 )
-logger = logging.getLogger("HF-Gradio-App")
+logger = logging.getLogger("HF-Stream-Bot")
 
 # Template engine
 templates_dir = Path(__file__).parent / "server" / "templates"
@@ -50,8 +59,7 @@ with gr.Blocks(title="Telegram Stream Bot ⚡", theme=gr.themes.Soft()) as demo:
 app: FastAPI = demo.app
 
 
-@app.on_event("startup")
-async def on_startup():
+async def start_telegram_bot_background():
     logger.info("Initializing SQLite database...")
     await db.init_db()
     logger.info("Starting Telegram MTProto Stream Bot client...")
@@ -60,6 +68,11 @@ async def on_startup():
         logger.info(f"⚡ Stream Bot successfully online as @{bot.me.username if bot.me else 'unknown'}!")
     except Exception as e:
         logger.error(f"Error starting Telegram client: {e}", exc_info=True)
+
+
+@app.on_event("startup")
+async def on_startup():
+    asyncio.create_task(start_telegram_bot_background())
 
 
 @app.get("/status")
@@ -101,7 +114,7 @@ async def watch_player_endpoint(file_hash: str):
 
 @app.get("/{file_hash}")
 async def stream_download_endpoint(file_hash: str, request: Request):
-    if file_hash in ["favicon.ico", "status", "watch"]:
+    if file_hash in ["favicon.ico", "status", "watch", "gradio_api"]:
         raise HTTPException(status_code=404)
 
     file_info = await db.get_file_by_hash(file_hash)
@@ -166,4 +179,8 @@ async def stream_download_endpoint(file_hash: str, request: Request):
 
 
 if __name__ == "__main__":
-    demo.launch(server_name="0.0.0.0", server_port=7860)
+    demo.launch(
+        server_name="0.0.0.0",
+        server_port=7860,
+        ssr_mode=False
+    )
