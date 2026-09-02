@@ -7,7 +7,7 @@ from jinja2 import Environment, FileSystemLoader
 from bot.config import Config
 from bot.database.db import db
 from bot.client import bot
-from bot.utils import human_readable_size
+from bot.utils import human_readable_size, extract_media
 from server.stream import parse_range_header, byte_range_chunk_generator
 
 logger = logging.getLogger(__name__)
@@ -15,6 +15,52 @@ logger = logging.getLogger(__name__)
 # Template directory setup
 templates_dir = Path(__file__).parent / "templates"
 jinja_env = Environment(loader=FileSystemLoader(str(templates_dir)), enable_async=True)
+
+
+async def get_or_recover_file(file_hash: str):
+    """
+    Retrieve file from database. If missing (e.g. ephemeral container redeployment),
+    automatically reconstruct and recover record from BIN_CHANNEL using the encoded message_id.
+    """
+    file_info = await db.get_file_by_hash(file_hash)
+    if file_info:
+        return file_info
+
+    # Attempt automatic recovery from Telegram storage channel
+    prefix = Config.HASH_PREFIX
+    if file_hash.startswith(prefix):
+        payload = file_hash[len(prefix):]
+        # First 12 characters are entropy, remainder is the message_id
+        if len(payload) > 12:
+            msg_id_str = payload[12:]
+            if msg_id_str.isdigit():
+                message_id = int(msg_id_str)
+                chat_id = Config.BIN_CHANNEL
+                if chat_id != 0:
+                    try:
+                        client = bot.get_stream_client()
+                        try:
+                            msg = await client.get_messages(chat_id=chat_id, message_ids=message_id)
+                        except Exception:
+                            msg = await bot.get_messages(chat_id=chat_id, message_ids=message_id)
+
+                        if msg and not getattr(msg, "empty", False):
+                            media, file_name, file_size, mime_type, file_unique_id, category, is_streamable = extract_media(msg)
+                            if media and file_size:
+                                await db.add_file(
+                                    file_hash=file_hash,
+                                    message_id=message_id,
+                                    file_name=file_name,
+                                    file_size=file_size,
+                                    mime_type=mime_type,
+                                    file_unique_id=file_unique_id,
+                                    user_id=0
+                                )
+                                logger.info(f"Auto-recovered file metadata for {file_hash} (msg_id: {message_id}) from Telegram storage")
+                                return await db.get_file_by_hash(file_hash)
+                    except Exception as e:
+                        logger.warning(f"Could not auto-recover {file_hash} from storage channel: {e}")
+    return None
 
 
 async def home_route(request: web.Request) -> web.Response:
@@ -44,7 +90,7 @@ async def watch_player_route(request: web.Request) -> web.Response:
     if not file_hash:
         raise web.HTTPBadRequest(text="Missing file hash parameter")
 
-    file_info = await db.get_file_by_hash(file_hash)
+    file_info = await get_or_recover_file(file_hash)
     if not file_info:
         raise web.HTTPNotFound(text="File not found or expired.")
 
@@ -79,7 +125,7 @@ async def stream_download_route(request: web.Request) -> web.StreamResponse:
     if not file_hash:
         raise web.HTTPBadRequest(text="Missing file hash")
 
-    file_info = await db.get_file_by_hash(file_hash)
+    file_info = await get_or_recover_file(file_hash)
     if not file_info:
         raise web.HTTPNotFound(text="Requested file was not found.")
 
