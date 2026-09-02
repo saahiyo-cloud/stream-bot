@@ -10,15 +10,16 @@ RUN pip install --no-cache-dir -r requirements.txt
 
 COPY . .
 
-# Hugging Face Spaces standard non-root user (UID 1000)
+# Non-root user for security
 RUN useradd -m -u 1000 user && chown -R user:user /app
 USER user
 
 ENV HOME=/home/user \
     PATH=/home/user/.local/bin:$PATH \
-    PORT=7860 \
+    PORT=8000 \
     PYTHONUNBUFFERED=1
 
-EXPOSE 7860
+EXPOSE 8000
 
 CMD ["python", "app.py"]
+
