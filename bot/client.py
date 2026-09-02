@@ -54,35 +54,36 @@ class StreamBot(Client):
             except Exception as exp_err:
                 logger.debug(f"Could not export session: {exp_err}")
 
-        # Initialize secondary worker clients for load-balancing chunk streaming
+        # Initialize secondary worker clients in background so web server starts immediately
         if Config.MULTI_TOKENS:
-            logger.info(f"Initializing {len(Config.MULTI_TOKENS)} multi-client workers...")
-            for idx, token in enumerate(Config.MULTI_TOKENS, start=1):
-                try:
-                    worker = Client(
-                        name=f"WorkerClient_{idx}",
-                        api_id=Config.API_ID,
-                        api_hash=Config.API_HASH,
-                        bot_token=token,
-                        no_updates=True,
-                        sleep_threshold=15,
-                        workers=16
-                    )
-                    while True:
-                        try:
-                            await worker.start()
-                            break
-                        except FloodWait as fe:
-                            logger.warning(f"Worker {idx} login FloodWait: sleeping {fe.value + 2}s...")
-                            await asyncio.sleep(fe.value + 2)
+            asyncio.create_task(self._init_workers())
 
-                    worker_me = await worker.get_me()
-                    self.worker_clients.append(worker)
-                    logger.info(f"Worker {idx} initialized as @{worker_me.username}")
-                except Exception as e:
-                    logger.error(f"Failed to initialize Worker {idx}: {e}")
+    async def _init_workers(self):
+        logger.info(f"Initializing {len(Config.MULTI_TOKENS)} multi-client workers in background...")
+        for idx, token in enumerate(Config.MULTI_TOKENS, start=1):
+            try:
+                worker = Client(
+                    name=f"WorkerClient_{idx}",
+                    api_id=Config.API_ID,
+                    api_hash=Config.API_HASH,
+                    bot_token=token,
+                    no_updates=True,
+                    sleep_threshold=15,
+                    workers=16
+                )
+                while True:
+                    try:
+                        await worker.start()
+                        break
+                    except FloodWait as fe:
+                        logger.warning(f"Worker {idx} login FloodWait: sleeping {fe.value + 2}s in background...")
+                        await asyncio.sleep(fe.value + 2)
 
-        logger.info(f"Active worker pool size: {len(self.worker_clients) + 1} (including main client)")
+                worker_me = await worker.get_me()
+                self.worker_clients.append(worker)
+                logger.info(f"Worker {idx} ready as @{worker_me.username} (Active Pool: {len(self.worker_clients) + 1})")
+            except Exception as e:
+                logger.error(f"Failed to initialize Worker {idx}: {e}")
 
     async def stop(self, *args):
         logger.info("Stopping bot and worker clients...")
