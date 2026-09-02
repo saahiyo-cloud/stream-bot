@@ -5,10 +5,10 @@ load_dotenv()
 
 
 class Config:
-    # Telegram API Credentials
-    API_ID = int(os.getenv("API_ID", "36818500") or 36818500)
-    API_HASH = os.getenv("API_HASH", "2be9ab61d199c2e7a09c29c2d866f84d") or "2be9ab61d199c2e7a09c29c2d866f84d"
-    BOT_TOKEN = os.getenv("BOT_TOKEN", "8903766051:AAFoaxItE4t8tTDld2VPvQliurHAL24fIzk") or "8903766051:AAFoaxItE4t8tTDld2VPvQliurHAL24fIzk"
+    # Telegram API Credentials (required - set via environment variables)
+    API_ID = int(os.getenv("API_ID", "0") or 0)
+    API_HASH = os.getenv("API_HASH", "")
+    BOT_TOKEN = os.getenv("BOT_TOKEN", "")
 
     # Multi-client worker tokens (comma-separated list for load balancing)
     MULTI_TOKENS = [
@@ -19,15 +19,15 @@ class Config:
 
     # Channel for storing media files (Required for persistence)
     # Must be an integer like -1001234567890
-    BIN_CHANNEL = int(os.getenv("BIN_CHANNEL", "-1004405063378") or 0)
+    BIN_CHANNEL = int(os.getenv("BIN_CHANNEL", "0") or 0)
 
     # Server Network Settings
     PORT = int(os.getenv("PORT", "7860") or 7860)
     BIND_ADDRESS = os.getenv("BIND_ADDRESS", "0.0.0.0")
 
-    # Public URLs for Link Generation (Hugging Face 24/7 direct origin)
-    SERVER_URL = os.getenv("SERVER_URL", "https://saahiyo-stream-bot.hf.space").rstrip("/")
-    WORKER_URL = os.getenv("WORKER_URL", "https://saahiyo-stream-bot.hf.space").rstrip("/")
+    # Public URLs for Link Generation
+    SERVER_URL = os.getenv("SERVER_URL", "").rstrip("/")
+    WORKER_URL = os.getenv("WORKER_URL", "").rstrip("/")
 
     # The effective public base URL shown to users
     @classmethod
@@ -50,3 +50,4 @@ class Config:
 
     # Hash prefix for vanity URLs (e.g. stream-...)
     HASH_PREFIX = os.getenv("HASH_PREFIX", "stream-")
+

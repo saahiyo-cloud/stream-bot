@@ -45,7 +45,7 @@ async def main():
 
     public_url = Config.get_public_url()
     logger.info("=" * 60)
-    logger.info("⚡ STREAM BOT IS NOW ONLINE ON HUGGING FACE SPACES!")
+    logger.info("⚡ STREAM BOT IS NOW ONLINE!")
     logger.info(f"🤖 Bot Username   : @{bot.me.username if bot.me else 'unknown'}")
     logger.info(f"🌐 Backend Server : http://{bind_address}:{port}")
     logger.info(f"🔗 Public Domain  : {public_url}")
