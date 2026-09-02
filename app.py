@@ -5,17 +5,9 @@ import urllib.parse
 from pathlib import Path
 from fastapi import FastAPI, Request, HTTPException
 from fastapi.responses import HTMLResponse, JSONResponse, StreamingResponse
+from fastapi.middleware.cors import CORSMiddleware
 import gradio as gr
 from jinja2 import Environment, FileSystemLoader
-
-# Support for Hugging Face ZeroGPU / Spaces environment
-try:
-    import spaces
-    @spaces.GPU
-    def _hf_spaces_watchdog():
-        return True
-except Exception:
-    pass
 
 # Set up event loop before importing hydrogram
 try:
@@ -41,25 +33,20 @@ logger = logging.getLogger("HF-Stream-Bot")
 templates_dir = Path(__file__).parent / "server" / "templates"
 jinja_env = Environment(loader=FileSystemLoader(str(templates_dir)), enable_async=True)
 
-# Gradio Blocks UI (Satisfies Hugging Face Gradio health checks)
-with gr.Blocks(title="Telegram Stream Bot ⚡", theme=gr.themes.Soft()) as demo:
-    gr.Markdown("# ⚡ Telegram File Stream & Direct Download Bot")
-    gr.Markdown("### 24/7 High-Speed MTProto Chunk Streaming Server")
-    with gr.Row():
-        gr.Markdown(
-            "🟢 **Status:** `Online & Ready`\n\n"
-            "🤖 **Bot Username:** [@mastream_bot](https://t.me/mastream_bot)\n\n"
-            "🌐 **Edge CDN Domain:** `https://dl.shakir-ansarii075.workers.dev`\n\n"
-            "🚀 **Engine:** Hydrogram MTProto + FastAPI Streaming"
-        )
-    gr.Markdown("---")
-    gr.Markdown("📤 **How to use:** Send any media (Video, Audio, Photo, APK, Document) to **[@mastream_bot](https://t.me/mastream_bot)** on Telegram to generate live streaming & direct download links!")
+# 1. Initialize FastAPI Application
+app = FastAPI(title="Telegram Stream Bot ⚡")
 
-# Get the FastAPI app underlying Gradio
-app: FastAPI = demo.app
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
 
-async def start_telegram_bot_background():
+@app.on_event("startup")
+async def on_startup():
     logger.info("Initializing SQLite database...")
     await db.init_db()
     logger.info("Starting Telegram MTProto Stream Bot client...")
@@ -68,11 +55,6 @@ async def start_telegram_bot_background():
         logger.info(f"⚡ Stream Bot successfully online as @{bot.me.username if bot.me else 'unknown'}!")
     except Exception as e:
         logger.error(f"Error starting Telegram client: {e}", exc_info=True)
-
-
-@app.on_event("startup")
-async def on_startup():
-    asyncio.create_task(start_telegram_bot_background())
 
 
 @app.get("/status")
@@ -114,7 +96,7 @@ async def watch_player_endpoint(file_hash: str):
 
 @app.get("/{file_hash}")
 async def stream_download_endpoint(file_hash: str, request: Request):
-    if file_hash in ["favicon.ico", "status", "watch", "gradio_api"]:
+    if file_hash in ["favicon.ico", "status", "watch", "gradio_api", "ui"]:
         raise HTTPException(status_code=404)
 
     file_info = await db.get_file_by_hash(file_hash)
@@ -178,9 +160,23 @@ async def stream_download_endpoint(file_hash: str, request: Request):
     )
 
 
+# 2. Gradio Dashboard
+with gr.Blocks(title="Telegram Stream Bot ⚡", theme=gr.themes.Soft()) as demo:
+    gr.Markdown("# ⚡ Telegram File Stream & Direct Download Bot")
+    gr.Markdown("### 24/7 High-Speed MTProto Chunk Streaming Server")
+    with gr.Row():
+        gr.Markdown(
+            "🟢 **Status:** `Online & Ready`\n\n"
+            "🤖 **Bot Username:** [@mastream_bot](https://t.me/mastream_bot)\n\n"
+            "🌐 **Edge CDN Domain:** `https://dl.shakir-ansarii075.workers.dev`\n\n"
+            "🚀 **Engine:** Hydrogram MTProto + FastAPI Streaming"
+        )
+    gr.Markdown("---")
+    gr.Markdown("📤 **How to use:** Send any media (Video, Audio, Photo, APK, Document) to **[@mastream_bot](https://t.me/mastream_bot)** on Telegram to generate live streaming & direct download links!")
+
+# Mount Gradio onto FastAPI root
+app = gr.mount_gradio_app(app, demo, path="/")
+
 if __name__ == "__main__":
-    demo.launch(
-        server_name="0.0.0.0",
-        server_port=7860,
-        ssr_mode=False
-    )
+    import uvicorn
+    uvicorn.run(app, host="0.0.0.0", port=7860)
