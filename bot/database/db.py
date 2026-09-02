@@ -34,6 +34,7 @@ class Database:
                 )
             """)
             await db.execute("CREATE INDEX IF NOT EXISTS idx_file_hash ON files(file_hash)")
+            await db.execute("CREATE INDEX IF NOT EXISTS idx_file_unique_id ON files(file_unique_id)")
             await db.commit()
 
     async def add_file(self, file_hash: str, message_id: int, file_name: str, file_size: int,
@@ -51,6 +52,17 @@ class Database:
         async with aiosqlite.connect(self.db_path) as db:
             db.row_factory = aiosqlite.Row
             cursor = await db.execute("SELECT * FROM files WHERE file_hash = ?", (file_hash,))
+            row = await cursor.fetchone()
+            if row:
+                return dict(row)
+            return None
+
+    async def get_file_by_unique_id(self, file_unique_id: str):
+        if not file_unique_id:
+            return None
+        async with aiosqlite.connect(self.db_path) as db:
+            db.row_factory = aiosqlite.Row
+            cursor = await db.execute("SELECT * FROM files WHERE file_unique_id = ? ORDER BY id DESC LIMIT 1", (file_unique_id,))
             row = await cursor.fetchone()
             if row:
                 return dict(row)

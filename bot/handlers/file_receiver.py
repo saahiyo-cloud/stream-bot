@@ -41,28 +41,35 @@ async def media_file_handler(client: Client, message: Message):
     status_msg = await message.reply_text("⚡ **Generating ultra-fast link...**", quote=True)
 
     try:
-        # Save file reference to BIN_CHANNEL for permanent storage
-        storage_msg_id = message.id
-        if Config.BIN_CHANNEL != 0:
-            try:
-                forwarded_msg = await message.copy(chat_id=Config.BIN_CHANNEL)
-                storage_msg_id = forwarded_msg.id
-            except Exception as copy_err:
-                logger.warning(f"Could not forward to BIN_CHANNEL ({Config.BIN_CHANNEL}): {copy_err}. Falling back to direct message ID.")
+        # Check if file has already been stored (deduplication by file_unique_id)
+        existing_file = await db.get_file_by_unique_id(file_unique_id)
+        if existing_file:
+            logger.info(f"Duplicate media detected (unique_id: {file_unique_id}). Reusing hash {existing_file['file_hash']}")
+            file_hash = existing_file["file_hash"]
+            storage_msg_id = existing_file["message_id"]
+        else:
+            # Save file reference to BIN_CHANNEL for permanent storage
+            storage_msg_id = message.id
+            if Config.BIN_CHANNEL != 0:
+                try:
+                    forwarded_msg = await message.copy(chat_id=Config.BIN_CHANNEL)
+                    storage_msg_id = forwarded_msg.id
+                except Exception as copy_err:
+                    logger.warning(f"Could not forward to BIN_CHANNEL ({Config.BIN_CHANNEL}): {copy_err}. Falling back to direct message ID.")
 
-        # Generate unique vanity file hash
-        file_hash = generate_file_hash(storage_msg_id)
+            # Generate unique vanity file hash
+            file_hash = generate_file_hash(storage_msg_id)
 
-        # Store record in database
-        await db.add_file(
-            file_hash=file_hash,
-            message_id=storage_msg_id,
-            file_name=file_name,
-            file_size=file_size,
-            mime_type=mime_type,
-            file_unique_id=file_unique_id,
-            user_id=user_id
-        )
+            # Store record in database
+            await db.add_file(
+                file_hash=file_hash,
+                message_id=storage_msg_id,
+                file_name=file_name,
+                file_size=file_size,
+                mime_type=mime_type,
+                file_unique_id=file_unique_id,
+                user_id=user_id
+            )
 
         base_url = Config.get_public_url()
         stream_url = f"{base_url}/watch/{file_hash}"
