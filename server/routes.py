@@ -65,6 +65,23 @@ async def get_or_recover_file(file_hash: str):
 
 
 async def home_route(request: web.Request) -> web.Response:
+    # If browser requests HTML, render Vanguard agency landing page
+    accept_header = request.headers.get("Accept", "")
+    if "text/html" in accept_header or "*/*" in accept_header:
+        try:
+            stats = await db.get_stats()
+            template = jinja_env.get_template("home.html")
+            bot_username = bot.me.username if bot.me else "mastream_bot"
+            html = await template.render_async(
+                bot_username=bot_username,
+                total_files=stats["total_files"],
+                total_size=human_readable_size(stats["total_size"]),
+                workers_count=len(bot.worker_clients) + 1
+            )
+            return web.Response(text=html, content_type="text/html")
+        except Exception as e:
+            logger.warning(f"Failed to render home.html: {e}")
+
     return web.json_response({
         "bot": "Telegram File Stream Bot ⚡",
         "status": "online",

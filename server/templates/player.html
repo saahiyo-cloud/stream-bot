@@ -2,697 +2,1033 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
     <title>{{ file_name }} — Stream Bot</title>
-    <meta name="description" content="Stream or download {{ file_name }} directly at maximum speed with zero buffering.">
-    
-    <!-- Google Fonts -->
+    <meta name="description" content="Stream or download {{ file_name }} at instant edge speed with zero buffering.">
+    <meta name="theme-color" content="#050508">
+
+    <!-- Premium Typography: Plus Jakarta Sans & JetBrains Mono (Strictly no banned Inter/Roboto/Arial) -->
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
-    
-    <!-- Plyr CSS -->
+    <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:ital,wght@0,300;0,400;0,500;0,600;0,700;0,800;1,400&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+
+    <!-- Plyr Video Player Stylesheet -->
     <link rel="stylesheet" href="https://cdn.plyr.io/3.7.8/plyr.css" />
 
     <style>
+        /* -------------------------------------------------------------
+           DESIGN TOKENS & ATOMIC SCALE (Awwwards Vanguard Tier)
+           ------------------------------------------------------------- */
         :root {
-            --bg-body: #07090e;
-            --surface-1: rgba(15, 21, 37, 0.7);
-            --surface-2: rgba(26, 35, 60, 0.55);
-            --border-glass: rgba(255, 255, 255, 0.09);
-            --border-highlight: rgba(99, 102, 241, 0.25);
-            --accent-primary: #6366f1;
-            --accent-secondary: #8b5cf6;
+            --bg-void: #050508;
+            --bg-surface: #0a0e1a;
+            --bezel-outer-bg: rgba(255, 255, 255, 0.035);
+            --bezel-outer-border: rgba(255, 255, 255, 0.08);
+            --bezel-inner-bg: rgba(11, 15, 27, 0.72);
+            --bezel-inner-border: rgba(255, 255, 255, 0.06);
+            --bezel-inner-highlight: inset 0 1px 1px 0 rgba(255, 255, 255, 0.15);
+            
             --accent-cyan: #06b6d4;
-            --text-main: #f8fafc;
-            --text-muted: #94a3b8;
-            --text-dim: #64748b;
-            --badge-green: #10b981;
-            --radius-xl: 24px;
-            --radius-lg: 16px;
-            --radius-md: 12px;
-            --plyr-color-main: #6366f1;
-            --plyr-video-background: #000;
+            --accent-indigo: #6366f1;
+            --accent-violet: #8b5cf6;
+            --accent-emerald: #10b981;
+            
+            --text-primary: #f8fafc;
+            --text-secondary: #94a3b8;
+            --text-tertiary: #64748b;
+            --text-ghost: #334155;
+            
+            /* Fluid Spacing & Concentric Radii */
+            --radius-outer-xl: 32px;
+            --radius-inner-xl: 24px;
+            --radius-outer-lg: 24px;
+            --radius-inner-lg: 18px;
+            --radius-pill: 9999px;
+            
+            /* Custom Physics Interpolation (Zero linear or generic ease-in-out) */
+            --spring-fluid: cubic-bezier(0.32, 0.72, 0, 1);
+            --spring-bounce: cubic-bezier(0.16, 1, 0.3, 1);
+            --spring-snappy: cubic-bezier(0.2, 0.8, 0.2, 1);
+            
+            --plyr-color-main: #06b6d4;
+            --plyr-video-background: #000000;
         }
 
-        * {
+        /* -------------------------------------------------------------
+           RESET & FOUNDATION
+           ------------------------------------------------------------- */
+        *, *::before, *::after {
             margin: 0;
             padding: 0;
             box-sizing: border-box;
-            font-family: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, sans-serif;
+            -webkit-font-smoothing: antialiased;
+            -moz-osx-font-smoothing: grayscale;
         }
 
         body {
-            background-color: var(--bg-body);
-            color: var(--text-main);
-            min-height: 100vh;
+            background-color: var(--bg-void);
+            color: var(--text-primary);
+            font-family: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, sans-serif;
+            min-height: 100dvh;
             display: flex;
             flex-direction: column;
             align-items: center;
-            padding: 32px 20px 48px;
             position: relative;
             overflow-x: hidden;
+            padding: 0 16px 64px;
         }
 
-        /* Ambient Glow Background */
-        .ambient-glow {
+        /* -------------------------------------------------------------
+           ETHEREAL GLASS BACKGROUND & NOISE TEXTURE
+           ------------------------------------------------------------- */
+        .ambient-mesh {
             position: fixed;
-            top: 0;
-            left: 50%;
-            transform: translateX(-50%);
-            width: 1000px;
-            height: 450px;
-            background: radial-gradient(ellipse 60% 50% at 50% 0%, rgba(99, 102, 241, 0.18), transparent 70%),
-                        radial-gradient(ellipse 40% 40% at 80% 20%, rgba(6, 182, 212, 0.12), transparent 60%);
+            inset: 0;
             pointer-events: none;
             z-index: 0;
+            overflow: hidden;
         }
 
-        .container {
+        .orb {
+            position: absolute;
+            border-radius: 50%;
+            filter: blur(120px);
+            opacity: 0.28;
+            will-change: transform;
+            animation: orbFloat 22s ease-in-out infinite alternate;
+        }
+
+        .orb-1 {
+            top: -10%;
+            left: 20%;
+            width: 580px;
+            height: 580px;
+            background: radial-gradient(circle, #6366f1 0%, rgba(99, 102, 241, 0) 70%);
+        }
+
+        .orb-2 {
+            top: 25%;
+            right: -10%;
+            width: 650px;
+            height: 650px;
+            background: radial-gradient(circle, #06b6d4 0%, rgba(6, 182, 212, 0) 70%);
+            animation-duration: 28s;
+            animation-delay: -5s;
+        }
+
+        .orb-3 {
+            bottom: -5%;
+            left: 10%;
+            width: 500px;
+            height: 500px;
+            background: radial-gradient(circle, #8b5cf6 0%, rgba(139, 92, 246, 0) 70%);
+            animation-duration: 25s;
+            animation-delay: -10s;
+        }
+
+        @keyframes orbFloat {
+            0% { transform: translate3d(0, 0, 0) scale(1); }
+            50% { transform: translate3d(40px, -30px, 0) scale(1.08); }
+            100% { transform: translate3d(-30px, 40px, 0) scale(0.95); }
+        }
+
+        /* Fixed GPU-Safe Noise/Grain Overlay */
+        .noise-overlay {
+            position: fixed;
+            inset: 0;
+            pointer-events: none;
+            z-index: 1;
+            opacity: 0.028;
+            background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noiseFilter'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.8' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noiseFilter)'/%3E%3C/svg%3E");
+        }
+
+        /* -------------------------------------------------------------
+           SPATIAL SCAFFOLD (MACRO-WHITESPACE CONTAINER)
+           ------------------------------------------------------------- */
+        .stage {
+            position: relative;
+            z-index: 10;
             width: 100%;
-            max-width: 980px;
+            max-width: 1160px;
             display: flex;
             flex-direction: column;
             gap: 24px;
-            position: relative;
-            z-index: 1;
         }
 
-        /* Modern Glass Header */
-        .navbar {
+        /* -------------------------------------------------------------
+           FLUID ISLAND NAVIGATION (Floating Pill Detached from Top)
+           ------------------------------------------------------------- */
+        .nav-island-wrapper {
+            width: 100%;
             display: flex;
-            justify-content: space-between;
-            align-items: center;
-            background: var(--surface-1);
-            backdrop-filter: blur(20px);
-            -webkit-backdrop-filter: blur(20px);
-            border: 1px solid var(--border-glass);
-            border-radius: var(--radius-lg);
-            padding: 14px 22px;
-            box-shadow: 0 10px 30px -10px rgba(0, 0, 0, 0.5);
-            transition: border-color 0.25s ease;
-        }
-
-        .navbar:hover {
-            border-color: var(--border-highlight);
-        }
-
-        .brand {
-            display: flex;
-            align-items: center;
-            gap: 12px;
-            text-decoration: none;
-            color: var(--text-main);
-        }
-
-        .brand-badge {
-            width: 40px;
-            height: 40px;
-            background: linear-gradient(135deg, var(--accent-primary), var(--accent-secondary));
-            border-radius: 12px;
-            display: flex;
-            align-items: center;
             justify-content: center;
-            font-size: 1.25rem;
-            box-shadow: 0 8px 20px -4px rgba(99, 102, 241, 0.5);
+            margin-top: 24px;
+            margin-bottom: 8px;
+            animation: fadeInDown 0.8s var(--spring-fluid) both;
         }
 
-        .brand-meta {
-            display: flex;
-            flex-direction: column;
-        }
-
-        .brand-title {
-            font-size: 1.15rem;
-            font-weight: 800;
-            letter-spacing: -0.02em;
-            background: linear-gradient(135deg, #fff 40%, #cbd5e1 100%);
-            -webkit-background-clip: text;
-            -webkit-text-fill-color: transparent;
-        }
-
-        .brand-subtitle {
-            font-size: 0.72rem;
-            color: var(--text-dim);
-            font-weight: 600;
-            text-transform: uppercase;
-            letter-spacing: 0.06em;
-        }
-
-        .channel-btn {
-            display: flex;
+        .nav-island {
+            display: inline-flex;
             align-items: center;
-            gap: 8px;
-            background: rgba(99, 102, 241, 0.12);
-            color: #818cf8;
-            border: 1px solid rgba(99, 102, 241, 0.28);
-            border-radius: 10px;
-            padding: 8px 16px;
-            font-size: 0.85rem;
-            font-weight: 600;
-            text-decoration: none;
-            transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+            gap: 16px;
+            background: rgba(15, 20, 35, 0.65);
+            backdrop-filter: blur(24px);
+            -webkit-backdrop-filter: blur(24px);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            box-shadow: 0 16px 36px -10px rgba(0, 0, 0, 0.6), inset 0 1px 1px rgba(255, 255, 255, 0.12);
+            border-radius: var(--radius-pill);
+            padding: 8px 18px;
+            transition: border-color 0.3s var(--spring-fluid), transform 0.3s var(--spring-fluid);
         }
 
-        .channel-btn:hover {
-            background: rgba(99, 102, 241, 0.22);
-            border-color: rgba(99, 102, 241, 0.5);
-            color: #a5b4fc;
+        .nav-island:hover {
+            border-color: rgba(255, 255, 255, 0.18);
             transform: translateY(-1px);
         }
 
-        /* Player & Media Container */
-        .player-viewport {
-            width: 100%;
-            background: #020408;
-            border-radius: var(--radius-xl);
-            overflow: hidden;
-            border: 1px solid var(--border-glass);
-            box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.8),
-                        0 0 0 1px rgba(255, 255, 255, 0.05);
+        .nav-brand {
             display: flex;
-            justify-content: center;
             align-items: center;
+            gap: 10px;
+            text-decoration: none;
+            color: var(--text-primary);
+        }
+
+        .brand-gem {
+            width: 28px;
+            height: 28px;
+            border-radius: 50%;
+            background: linear-gradient(135deg, #06b6d4, #6366f1);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 13px;
+            box-shadow: 0 0 16px rgba(6, 182, 212, 0.4);
+        }
+
+        .brand-label {
+            font-size: 13.5px;
+            font-weight: 700;
+            letter-spacing: -0.01em;
+            color: #ffffff;
+        }
+
+        .nav-divider {
+            width: 1px;
+            height: 18px;
+            background: rgba(255, 255, 255, 0.12);
+        }
+
+        .nav-status {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            font-size: 12px;
+            color: var(--text-secondary);
+            font-weight: 500;
+        }
+
+        .pulse-dot {
+            width: 7px;
+            height: 7px;
+            border-radius: 50%;
+            background: #10b981;
+            box-shadow: 0 0 10px #10b981;
+            animation: pulseGlow 2.5s infinite;
+        }
+
+        @keyframes pulseGlow {
+            0%, 100% { opacity: 1; transform: scale(1); }
+            50% { opacity: 0.55; transform: scale(0.85); }
+        }
+
+        .nav-channel-link {
+            text-decoration: none;
+            font-size: 12px;
+            font-weight: 600;
+            color: var(--accent-cyan);
+            background: rgba(6, 182, 212, 0.1);
+            border: 1px solid rgba(6, 182, 212, 0.25);
+            border-radius: var(--radius-pill);
+            padding: 4px 12px;
+            display: flex;
+            align-items: center;
+            gap: 5px;
+            transition: all 0.3s var(--spring-fluid);
+        }
+
+        .nav-channel-link:hover {
+            background: rgba(6, 182, 212, 0.2);
+            border-color: rgba(6, 182, 212, 0.45);
+            color: #ffffff;
+        }
+
+        /* -------------------------------------------------------------
+           DOUBLE-BEZEL (DOPPELRAND) NESTED HARDWARE ENCLOSURES
+           ------------------------------------------------------------- */
+        .double-bezel {
+            background: var(--bezel-outer-bg);
+            border: 1px solid var(--bezel-outer-border);
+            border-radius: var(--radius-outer-xl);
+            padding: 7px;
+            box-shadow: 0 32px 64px -24px rgba(0, 0, 0, 0.85);
             position: relative;
         }
 
-        .plyr--video {
-            border-radius: var(--radius-xl);
-            width: 100%;
-            aspect-ratio: 16 / 9;
-            background: #000;
+        .bezel-core {
+            background: var(--bezel-inner-bg);
+            border: 1px solid var(--bezel-inner-border);
+            border-radius: var(--radius-inner-xl);
+            box-shadow: var(--bezel-inner-highlight);
+            overflow: hidden;
+            position: relative;
         }
 
-        .image-preview {
+        /* -------------------------------------------------------------
+           MEDIA CINEMA VIEWPORT
+           ------------------------------------------------------------- */
+        .viewport-shell {
+            animation: fadeInUp 0.9s var(--spring-fluid) both;
+            animation-delay: 0.1s;
+        }
+
+        .viewport-core {
+            min-height: 440px;
+            background: #000000;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            position: relative;
+        }
+
+        /* Plyr Customization Overrides */
+        .plyr {
+            width: 100%;
+            height: 100%;
+            border-radius: var(--radius-inner-xl);
+            --plyr-video-control-background-hover: rgba(6, 182, 212, 0.9);
+            --plyr-control-radius: 8px;
+        }
+
+        .plyr--video {
+            background-color: #000000;
+            box-shadow: inset 0 0 60px rgba(0, 0, 0, 0.8);
+        }
+
+        /* Audio Player Presentation */
+        .audio-stage {
+            width: 100%;
+            padding: 64px 32px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 28px;
+            background: radial-gradient(circle at center, rgba(30, 41, 75, 0.6) 0%, rgba(5, 7, 13, 0.9) 100%);
+        }
+
+        .audio-disc-disc {
+            width: 96px;
+            height: 96px;
+            border-radius: 50%;
+            background: linear-gradient(135deg, #1e293b, #0f172a);
+            border: 2px solid rgba(255, 255, 255, 0.12);
+            box-shadow: 0 20px 40px -10px rgba(0, 0, 0, 0.8), 0 0 30px rgba(99, 102, 241, 0.25);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            position: relative;
+        }
+
+        .audio-disc-disc::after {
+            content: '';
+            width: 24px;
+            height: 24px;
+            border-radius: 50%;
+            background: #06b6d4;
+            box-shadow: 0 0 16px #06b6d4;
+        }
+
+        /* Image Display */
+        .image-display {
             max-width: 100%;
-            max-height: 75vh;
+            max-height: 720px;
             object-fit: contain;
             display: block;
+            margin: 0 auto;
         }
 
-        /* Hero view for non-streamable files */
-        .file-hero-box {
-            width: 100%;
-            padding: 70px 24px;
-            background: linear-gradient(180deg, var(--surface-1) 0%, rgba(10, 15, 28, 0.9) 100%);
-            border-radius: var(--radius-xl);
-            border: 1px solid var(--border-glass);
+        /* Document / Non-Streamable Hero Display */
+        .document-hero {
+            padding: 80px 32px;
             display: flex;
             flex-direction: column;
             align-items: center;
             text-align: center;
             gap: 20px;
-            box-shadow: 0 20px 40px -15px rgba(0, 0, 0, 0.6);
+            background: radial-gradient(circle at center, rgba(26, 35, 60, 0.45) 0%, rgba(5, 7, 13, 0.95) 100%);
         }
 
-        .hero-icon-wrapper {
-            width: 100px;
-            height: 100px;
-            border-radius: 28px;
+        .doc-icon-gem {
+            width: 80px;
+            height: 80px;
+            border-radius: 24px;
+            background: rgba(255, 255, 255, 0.04);
+            border: 1px solid rgba(255, 255, 255, 0.12);
+            box-shadow: 0 20px 40px -10px rgba(0, 0, 0, 0.6), inset 0 1px 1px rgba(255, 255, 255, 0.15);
             display: flex;
             align-items: center;
             justify-content: center;
-            font-size: 3.2rem;
-            position: relative;
         }
 
-        .icon-apk {
-            background: linear-gradient(135deg, rgba(34, 197, 94, 0.2), rgba(16, 185, 129, 0.28));
-            border: 1px solid rgba(34, 197, 94, 0.4);
-            box-shadow: 0 12px 30px -5px rgba(34, 197, 94, 0.35);
-        }
-
-        .icon-archive {
-            background: linear-gradient(135deg, rgba(234, 179, 8, 0.2), rgba(249, 115, 22, 0.28));
-            border: 1px solid rgba(234, 179, 8, 0.4);
-            box-shadow: 0 12px 30px -5px rgba(234, 179, 8, 0.35);
-        }
-
-        .icon-doc {
-            background: linear-gradient(135deg, rgba(99, 102, 241, 0.2), rgba(139, 92, 246, 0.28));
-            border: 1px solid rgba(99, 102, 241, 0.4);
-            box-shadow: 0 12px 30px -5px rgba(99, 102, 241, 0.35);
-        }
-
-        .hero-title {
-            font-size: 1.35rem;
+        .doc-title {
+            font-size: 24px;
             font-weight: 700;
-            color: var(--text-main);
-            max-width: 80%;
+            letter-spacing: -0.02em;
+            max-width: 600px;
+            line-height: 1.3;
+            color: #ffffff;
             word-break: break-word;
-            line-height: 1.4;
         }
 
-        .hero-description {
-            font-size: 0.92rem;
-            color: var(--text-muted);
+        .doc-desc {
+            font-size: 14px;
+            color: var(--text-secondary);
+            max-width: 480px;
         }
 
-        /* Audio Player Box */
-        .audio-container {
-            width: 100%;
-            padding: 48px 32px;
-            background: var(--surface-1);
-            border-radius: var(--radius-xl);
-            border: 1px solid var(--border-glass);
+        /* -------------------------------------------------------------
+           ASYMMETRICAL BENTO GRID ARCHITECTURE
+           ------------------------------------------------------------- */
+        .bento-grid {
+            display: grid;
+            grid-template-columns: repeat(12, 1fr);
+            gap: 20px;
+            animation: fadeInUp 0.9s var(--spring-fluid) both;
+            animation-delay: 0.2s;
+        }
+
+        /* Bento 1: Primary File Header & Meta (Span 8) */
+        .bento-header {
+            grid-column: span 8;
+        }
+
+        /* Bento 2: Primary Actions & CTA (Span 4) */
+        .bento-actions {
+            grid-column: span 4;
             display: flex;
             flex-direction: column;
-            align-items: center;
-            gap: 24px;
+            justify-content: space-between;
+            gap: 16px;
         }
 
-        .audio-disc {
-            width: 88px;
-            height: 88px;
-            border-radius: 50%;
-            background: linear-gradient(135deg, #6366f1, #06b6d4);
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            font-size: 2.2rem;
-            box-shadow: 0 10px 30px -6px rgba(99, 102, 241, 0.45);
-            animation: pulse-slow 3s infinite ease-in-out;
+        /* Bento 3: Telemetry & Specs Array (Span 12) */
+        .bento-telemetry {
+            grid-column: span 12;
         }
 
-        @keyframes pulse-slow {
-            0%, 100% { transform: scale(1); }
-            50% { transform: scale(1.04); }
-        }
-
-        /* File Information & Action Card */
-        .info-panel {
-            background: var(--surface-1);
-            backdrop-filter: blur(20px);
-            -webkit-backdrop-filter: blur(20px);
-            border: 1px solid var(--border-glass);
-            border-radius: var(--radius-xl);
+        .bento-card-inner {
             padding: 28px;
             display: flex;
             flex-direction: column;
-            gap: 24px;
-            box-shadow: 0 15px 35px -10px rgba(0, 0, 0, 0.4);
+            height: 100%;
         }
 
-        .file-header {
+        /* -------------------------------------------------------------
+           EYEBROW BADGES & TYPOGRAPHY
+           ------------------------------------------------------------- */
+        .eyebrow-row {
             display: flex;
-            flex-direction: column;
-            gap: 12px;
-        }
-
-        .file-name {
-            font-size: 1.35rem;
-            font-weight: 700;
-            color: var(--text-main);
-            word-break: break-word;
-            line-height: 1.4;
-            letter-spacing: -0.01em;
-        }
-
-        .badges-row {
-            display: flex;
-            gap: 8px;
-            flex-wrap: wrap;
             align-items: center;
+            gap: 10px;
+            margin-bottom: 14px;
+            flex-wrap: wrap;
         }
 
-        .chip {
+        .eyebrow {
             display: inline-flex;
             align-items: center;
             gap: 6px;
-            padding: 5px 12px;
-            border-radius: 8px;
-            font-size: 0.82rem;
-            font-weight: 600;
+            border-radius: var(--radius-pill);
+            padding: 4px 10px;
+            font-size: 10.5px;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 0.16em;
             background: rgba(255, 255, 255, 0.05);
-            border: 1px solid rgba(255, 255, 255, 0.08);
-            color: var(--text-muted);
+            border: 1px solid rgba(255, 255, 255, 0.09);
+            color: var(--text-secondary);
         }
 
-        .chip-size {
-            background: rgba(16, 185, 129, 0.12);
-            color: #34d399;
-            border-color: rgba(16, 185, 129, 0.28);
-        }
-
-        .chip-format {
-            background: rgba(99, 102, 241, 0.12);
-            color: #a5b4fc;
-            border-color: rgba(99, 102, 241, 0.28);
-        }
-
-        .chip-speed {
+        .eyebrow-accent {
             background: rgba(6, 182, 212, 0.1);
-            color: #67e8f9;
-            border-color: rgba(6, 182, 212, 0.25);
+            border-color: rgba(6, 182, 212, 0.3);
+            color: var(--accent-cyan);
         }
 
-        /* Modern Grid Action Buttons */
-        .action-row {
-            display: grid;
-            grid-template-columns: 2fr 1fr;
-            gap: 14px;
+        .eyebrow-speed {
+            background: rgba(99, 102, 241, 0.1);
+            border-color: rgba(99, 102, 241, 0.3);
+            color: #a5b4fc;
         }
 
-        @media (max-width: 640px) {
-            .action-row {
-                grid-template-columns: 1fr;
-            }
+        .file-heading {
+            font-size: 26px;
+            font-weight: 700;
+            letter-spacing: -0.025em;
+            line-height: 1.3;
+            color: #ffffff;
+            margin-bottom: 12px;
+            word-break: break-word;
         }
 
-        .btn {
-            display: inline-flex;
+        .file-subtext {
+            font-size: 14px;
+            color: var(--text-tertiary);
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            font-family: 'JetBrains Mono', monospace;
+        }
+
+        /* -------------------------------------------------------------
+           NESTED CTA & "BUTTON-IN-BUTTON" ARCHITECTURE
+           ------------------------------------------------------------- */
+        .cta-container {
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+            height: 100%;
+            justify-content: center;
+        }
+
+        /* Primary "Button-in-Button" Island Pill */
+        .btn-cta-primary {
+            position: relative;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 8px 8px 8px 24px;
+            border-radius: var(--radius-pill);
+            text-decoration: none;
+            background: linear-gradient(135deg, #06b6d4 0%, #3b82f6 50%, #6366f1 100%);
+            box-shadow: 0 16px 32px -8px rgba(6, 182, 212, 0.45), inset 0 1px 1px rgba(255, 255, 255, 0.35);
+            color: #ffffff;
+            font-size: 15px;
+            font-weight: 700;
+            letter-spacing: -0.01em;
+            transition: all 0.4s var(--spring-fluid);
+            outline: none;
+            border: none;
+            cursor: pointer;
+        }
+
+        .btn-cta-primary:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 20px 40px -8px rgba(6, 182, 212, 0.6), inset 0 1px 1px rgba(255, 255, 255, 0.45);
+        }
+
+        .btn-cta-primary:active {
+            transform: translateY(1px) scale(0.985);
+        }
+
+        /* Nested Trailing Icon Capsule */
+        .trailing-capsule {
+            width: 44px;
+            height: 44px;
+            border-radius: 50%;
+            background: rgba(0, 0, 0, 0.22);
+            backdrop-filter: blur(12px);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: transform 0.4s var(--spring-fluid), background-color 0.3s;
+            flex-shrink: 0;
+        }
+
+        .btn-cta-primary:hover .trailing-capsule {
+            transform: translate3d(2px, -2px, 0) scale(1.05);
+            background: rgba(0, 0, 0, 0.32);
+        }
+
+        /* Secondary Copy Pill */
+        .btn-cta-secondary {
+            display: flex;
             align-items: center;
             justify-content: center;
             gap: 10px;
-            padding: 14px 24px;
-            border-radius: var(--radius-md);
-            font-size: 0.98rem;
-            font-weight: 700;
-            text-decoration: none;
-            cursor: pointer;
-            border: none;
-            transition: all 0.22s cubic-bezier(0.16, 1, 0.3, 1);
-            position: relative;
-            overflow: hidden;
-        }
-
-        .btn-download {
-            background: linear-gradient(135deg, #4f46e5 0%, #6366f1 50%, #8b5cf6 100%);
-            color: #ffffff;
-            box-shadow: 0 10px 25px -5px rgba(99, 102, 241, 0.5),
-                        inset 0 1px 0 rgba(255, 255, 255, 0.25);
-        }
-
-        .btn-download:hover {
-            transform: translateY(-2px);
-            box-shadow: 0 14px 30px -4px rgba(99, 102, 241, 0.65);
-        }
-
-        .btn-copy {
+            padding: 14px 22px;
+            border-radius: var(--radius-pill);
             background: rgba(255, 255, 255, 0.05);
-            color: var(--text-main);
-            border: 1px solid var(--border-glass);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            color: var(--text-primary);
+            font-size: 13.5px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.35s var(--spring-fluid);
+            box-shadow: inset 0 1px 1px rgba(255, 255, 255, 0.08);
         }
 
-        .btn-copy:hover {
+        .btn-cta-secondary:hover {
             background: rgba(255, 255, 255, 0.09);
             border-color: rgba(255, 255, 255, 0.18);
-            transform: translateY(-2px);
+            transform: translateY(-1px);
         }
 
-        .btn:active {
-            transform: translateY(0);
+        .btn-cta-secondary:active {
+            transform: translateY(1px) scale(0.985);
         }
 
-        /* Direct URL Quick Access Bar */
-        .link-box {
+        /* -------------------------------------------------------------
+           DIRECT LINK BAR (Micro-Haptic Copy Architecture)
+           ------------------------------------------------------------- */
+        .direct-link-shell {
+            margin-top: 14px;
             display: flex;
             align-items: center;
-            background: rgba(0, 0, 0, 0.35);
-            border: 1px solid rgba(255, 255, 255, 0.06);
-            border-radius: 10px;
+            justify-content: space-between;
+            background: rgba(5, 8, 16, 0.85);
+            border: 1px solid rgba(255, 255, 255, 0.07);
+            border-radius: 14px;
             padding: 10px 14px;
             gap: 12px;
+            transition: border-color 0.3s;
         }
 
-        .link-text {
+        .direct-link-shell:focus-within {
+            border-color: rgba(6, 182, 212, 0.4);
+        }
+
+        .link-text-display {
             font-family: 'JetBrains Mono', monospace;
-            font-size: 0.82rem;
-            color: var(--text-dim);
+            font-size: 12px;
+            color: var(--text-tertiary);
             overflow: hidden;
             text-overflow: ellipsis;
             white-space: nowrap;
-            flex-grow: 1;
+            user-select: all;
         }
 
-        .link-copy-icon {
-            cursor: pointer;
-            color: var(--text-muted);
-            font-size: 0.9rem;
-            transition: color 0.15s ease;
+        .mini-copy-trigger {
             background: none;
             border: none;
-            display: flex;
-            align-items: center;
+            color: var(--text-secondary);
+            cursor: pointer;
             padding: 4px;
-        }
-
-        .link-copy-icon:hover {
-            color: #fff;
-        }
-
-        /* Detailed Stats Grid */
-        .stats-grid {
-            display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(130px, 1fr));
-            gap: 12px;
-            background: rgba(0, 0, 0, 0.25);
-            border: 1px solid rgba(255, 255, 255, 0.05);
-            border-radius: var(--radius-md);
-            padding: 16px;
-        }
-
-        .stat-card {
-            display: flex;
-            flex-direction: column;
-            gap: 4px;
-        }
-
-        .stat-label {
-            font-size: 0.72rem;
-            text-transform: uppercase;
-            letter-spacing: 0.05em;
-            color: var(--text-dim);
-            font-weight: 600;
-        }
-
-        .stat-val {
-            font-size: 0.92rem;
-            font-weight: 700;
-            color: var(--text-main);
-            overflow: hidden;
-            text-overflow: ellipsis;
-            white-space: nowrap;
-        }
-
-        .stat-mono {
-            font-family: 'JetBrains Mono', monospace;
-            font-size: 0.82rem;
-            color: #a5b4fc;
-        }
-
-        .stat-active {
-            color: #34d399;
-        }
-
-        /* Clean Minimal Footer */
-        .footer {
             display: flex;
             align-items: center;
             justify-content: center;
-            gap: 8px;
-            font-size: 0.82rem;
-            color: var(--text-dim);
-            margin-top: 12px;
+            border-radius: 6px;
+            transition: color 0.2s, background-color 0.2s;
+            flex-shrink: 0;
         }
 
-        .footer span.dot {
-            width: 4px;
-            height: 4px;
-            background: var(--text-dim);
-            border-radius: 50%;
+        .mini-copy-trigger:hover {
+            color: #ffffff;
+            background: rgba(255, 255, 255, 0.08);
         }
 
-        /* Modern Floating Toast Notification */
-        .toast {
-            position: fixed;
-            bottom: 30px;
-            background: rgba(15, 23, 42, 0.9);
-            border: 1px solid rgba(99, 102, 241, 0.4);
-            color: #fff;
-            padding: 12px 22px;
-            border-radius: 12px;
-            font-size: 0.9rem;
+        /* -------------------------------------------------------------
+           TELEMETRY SPECIFICATIONS MATRIX (6-Slot Hardware Array)
+           ------------------------------------------------------------- */
+        .specs-array {
+            display: grid;
+            grid-template-columns: repeat(6, 1fr);
+            gap: 14px;
+        }
+
+        .spec-item {
+            background: rgba(255, 255, 255, 0.02);
+            border: 1px solid rgba(255, 255, 255, 0.05);
+            border-radius: var(--radius-inner-lg);
+            padding: 16px 18px;
+            display: flex;
+            flex-direction: column;
+            gap: 6px;
+            box-shadow: inset 0 1px 1px rgba(255, 255, 255, 0.04);
+            transition: border-color 0.3s var(--spring-fluid), transform 0.3s var(--spring-fluid);
+        }
+
+        .spec-item:hover {
+            border-color: rgba(255, 255, 255, 0.12);
+            transform: translateY(-2px);
+        }
+
+        .spec-label {
+            font-size: 11px;
             font-weight: 600;
-            box-shadow: 0 12px 30px rgba(0, 0, 0, 0.6), 0 0 20px rgba(99, 102, 241, 0.2);
-            backdrop-filter: blur(16px);
-            opacity: 0;
-            transform: translateY(15px);
-            transition: all 0.25s cubic-bezier(0.16, 1, 0.3, 1);
-            pointer-events: none;
-            z-index: 1000;
+            color: var(--text-tertiary);
+            text-transform: uppercase;
+            letter-spacing: 0.08em;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+
+        .spec-value {
+            font-size: 14px;
+            font-weight: 700;
+            color: var(--text-primary);
+            letter-spacing: -0.01em;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+
+        .spec-mono {
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 13px;
+        }
+
+        .spec-active-badge {
+            color: var(--accent-emerald);
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+
+        /* -------------------------------------------------------------
+           FOOTER SPATIAL BAR
+           ------------------------------------------------------------- */
+        .stage-footer {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 24px 8px 0;
+            font-size: 12.5px;
+            color: var(--text-tertiary);
+            border-top: 1px solid rgba(255, 255, 255, 0.05);
+            animation: fadeIn 1s var(--spring-fluid) both;
+            animation-delay: 0.3s;
+        }
+
+        .footer-brand {
             display: flex;
             align-items: center;
             gap: 8px;
+            font-weight: 600;
+            color: var(--text-secondary);
         }
 
-        .toast.show {
+        .footer-tagline {
+            font-size: 12px;
+            font-family: 'JetBrains Mono', monospace;
+            color: var(--text-tertiary);
+        }
+
+        /* -------------------------------------------------------------
+           HAPTIC TOAST NOTIFICATION
+           ------------------------------------------------------------- */
+        .toast-bubble {
+            position: fixed;
+            bottom: 32px;
+            background: rgba(15, 23, 42, 0.88);
+            backdrop-filter: blur(24px);
+            -webkit-backdrop-filter: blur(24px);
+            border: 1px solid rgba(255, 255, 255, 0.15);
+            box-shadow: 0 24px 48px -12px rgba(0, 0, 0, 0.8), inset 0 1px 1px rgba(255, 255, 255, 0.2);
+            border-radius: var(--radius-pill);
+            padding: 12px 22px;
+            color: #ffffff;
+            font-size: 13px;
+            font-weight: 600;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            z-index: 1000;
+            opacity: 0;
+            transform: translate3d(0, 24px, 0) scale(0.95);
+            pointer-events: none;
+            transition: opacity 0.35s var(--spring-fluid), transform 0.35s var(--spring-fluid);
+        }
+
+        .toast-bubble.show {
             opacity: 1;
-            transform: translateY(0);
+            transform: translate3d(0, 0, 0) scale(1);
+        }
+
+        /* -------------------------------------------------------------
+           KEYFRAME ANIMATIONS (Physics Interpolation)
+           ------------------------------------------------------------- */
+        @keyframes fadeInDown {
+            from { opacity: 0; transform: translate3d(0, -18px, 0); }
+            to { opacity: 1; transform: translate3d(0, 0, 0); }
+        }
+
+        @keyframes fadeInUp {
+            from { opacity: 0; transform: translate3d(0, 24px, 0); }
+            to { opacity: 1; transform: translate3d(0, 0, 0); }
+        }
+
+        @keyframes fadeIn {
+            from { opacity: 0; }
+            to { opacity: 1; }
+        }
+
+        /* -------------------------------------------------------------
+           RESPONSIVE COLLAPSE (Universal Mobile Fallback)
+           ------------------------------------------------------------- */
+        @media (max-width: 960px) {
+            .bento-header { grid-column: span 12; }
+            .bento-actions { grid-column: span 12; }
+            .specs-array { grid-template-columns: repeat(3, 1fr); }
+        }
+
+        @media (max-width: 640px) {
+            body { padding: 0 12px 48px; }
+            .stage { gap: 18px; }
+            .nav-island-wrapper { margin-top: 16px; margin-bottom: 4px; }
+            .nav-island { padding: 6px 14px; gap: 10px; }
+            .brand-label { font-size: 12px; }
+            .nav-channel-link { font-size: 11px; padding: 3px 8px; }
+            
+            .double-bezel { border-radius: 24px; padding: 5px; }
+            .bezel-core { border-radius: 19px; }
+            
+            .viewport-core { min-height: 280px; }
+            .bento-card-inner { padding: 20px 16px; }
+            
+            .file-heading { font-size: 20px; }
+            .specs-array { grid-template-columns: repeat(2, 1fr); gap: 10px; }
+            .spec-item { padding: 12px 14px; }
+            
+            .stage-footer { flex-direction: column; gap: 8px; text-align: center; }
+            .btn-cta-primary { padding: 6px 6px 6px 18px; font-size: 14px; }
+            .trailing-capsule { width: 38px; height: 38px; }
         }
     </style>
 </head>
 <body>
-    <div class="ambient-glow"></div>
-
-    <div class="container">
-        <!-- Navigation Bar -->
-        <nav class="navbar">
-            <a href="/" class="brand">
-                <div class="brand-badge">⚡</div>
-                <div class="brand-meta">
-                    <span class="brand-title">Stream Bot</span>
-                    <span class="brand-subtitle">High-Speed Streaming</span>
-                </div>
-            </a>
-            {% if updates_channel %}
-            <a href="https://t.me/{{ updates_channel | replace('@', '') }}" target="_blank" rel="noopener" class="channel-btn">
-                <span>📢 {{ updates_channel }}</span>
-            </a>
-            {% endif %}
-        </nav>
-
-        <!-- Media & Player Viewport -->
-        <div class="player-viewport">
-            {% if mime_type.startswith('image/') %}
-                <!-- Image Viewer -->
-                <img src="{{ raw_stream_url }}" alt="{{ file_name }}" class="image-preview" loading="lazy" />
-            {% elif mime_type.startswith('audio/') %}
-                <!-- Modern Audio Player -->
-                <div class="audio-container">
-                    <div class="audio-disc">🎵</div>
-                    <audio id="player" playsinline controls preload="metadata" style="width: 100%;">
-                        <source src="{{ raw_stream_url }}" type="{{ mime_type }}">
-                        Your browser does not support audio playback.
-                    </audio>
-                </div>
-            {% elif mime_type.startswith('video/') or file_name.endswith(('.mp4', '.mkv', '.webm', '.avi', '.mov', '.flv')) %}
-                <!-- Custom Plyr Video Player -->
-                <video id="player" playsinline controls preload="metadata">
-                    <source src="{{ raw_stream_url }}" type="{{ mime_type }}">
-                    Your browser does not support video streaming.
-                </video>
-            {% elif 'package-archive' in mime_type or file_name.endswith('.apk') %}
-                <!-- Android APK Hub -->
-                <div class="file-hero-box">
-                    <div class="hero-icon-wrapper icon-apk">📱</div>
-                    <h2 class="hero-title">{{ file_name }}</h2>
-                    <p class="hero-description">Android Application Package • Instant Direct Download</p>
-                </div>
-            {% elif 'zip' in mime_type or 'rar' in mime_type or file_name.endswith(('.zip', '.rar', '.7z', '.tar', '.gz')) %}
-                <!-- Archive Hub -->
-                <div class="file-hero-box">
-                    <div class="hero-icon-wrapper icon-archive">🗜️</div>
-                    <h2 class="hero-title">{{ file_name }}</h2>
-                    <p class="hero-description">Compressed Archive • High-Speed Direct Download</p>
-                </div>
-            {% else %}
-                <!-- Generic Document Hub -->
-                <div class="file-hero-box">
-                    <div class="hero-icon-wrapper icon-doc">📄</div>
-                    <h2 class="hero-title">{{ file_name }}</h2>
-                    <p class="hero-description">Document & File • High-Speed Direct Download</p>
-                </div>
-            {% endif %}
-        </div>
-
-        <!-- Information & Actions Card -->
-        <div class="info-panel">
-            <div class="file-header">
-                <h1 class="file-name">{{ file_name }}</h1>
-                <div class="badges-row">
-                    <span class="chip chip-size">📦 {{ formatted_size }}</span>
-                    {% if 'package-archive' in mime_type or file_name.endswith('.apk') %}
-                        <span class="chip">📱 Android App</span>
-                    {% elif mime_type.startswith('image/') %}
-                        <span class="chip">🖼️ Image</span>
-                    {% elif mime_type.startswith('video/') or file_name.endswith(('.mp4', '.mkv', '.webm', '.avi')) %}
-                        <span class="chip chip-format">🎬 Video</span>
-                    {% elif mime_type.startswith('audio/') %}
-                        <span class="chip chip-format">🎵 Audio</span>
-                    {% else %}
-                        <span class="chip">📁 Document</span>
-                    {% endif %}
-                    <span class="chip chip-speed">⚡ Multi-Bot Accelerated</span>
-                </div>
-            </div>
-
-            <!-- Detailed File Metadata Stats Grid -->
-            <div class="stats-grid">
-                <div class="stat-card">
-                    <span class="stat-label">📁 File Size</span>
-                    <span class="stat-val">{{ formatted_size }}</span>
-                </div>
-                <div class="stat-card">
-                    <span class="stat-label">🏷️ MIME Type</span>
-                    <span class="stat-val stat-mono">{{ mime_type }}</span>
-                </div>
-                <div class="stat-card">
-                    <span class="stat-label">📅 Uploaded On</span>
-                    <span class="stat-val">{{ uploaded_date }}</span>
-                </div>
-                <div class="stat-card">
-                    <span class="stat-label">👁️ Total Views</span>
-                    <span class="stat-val">{{ views_count }}</span>
-                </div>
-                <div class="stat-card">
-                    <span class="stat-label">📥 Total Downloads</span>
-                    <span class="stat-val">{{ downloads_count }}</span>
-                </div>
-                <div class="stat-card">
-                    <span class="stat-label">⚡ Stream Status</span>
-                    <span class="stat-val stat-active">🟢 Active Edge</span>
-                </div>
-            </div>
-
-            <!-- Primary Action Buttons (VLC Removed) -->
-            <div class="action-row">
-                <a href="{{ download_url }}" class="btn btn-download" download>
-                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
-                        <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
-                        <polyline points="7 10 12 15 17 10"></polyline>
-                        <line x1="12" y1="15" x2="12" y2="3"></line>
-                    </svg>
-                    <span>Download File ({{ formatted_size }})</span>
-                </a>
-                <button onclick="copyDownloadUrl()" class="btn btn-copy" title="Copy direct download link">
-                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                        <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
-                        <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
-                    </svg>
-                    <span>Copy Link</span>
-                </button>
-            </div>
-
-            <!-- Quick Direct Link Preview -->
-            <div class="link-box">
-                <span class="link-text" id="directLinkPreview">{{ download_url }}</span>
-                <button onclick="copyDownloadUrl()" class="link-copy-icon" aria-label="Copy Link">
-                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                        <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
-                        <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
-                    </svg>
-                </button>
-            </div>
-        </div>
-
-        <!-- Footer -->
-        <footer class="footer">
-            <span>Stream Bot ⚡</span>
-            <span class="dot"></span>
-            <span>Ultra-Fast MTProto Edge Streaming</span>
-        </footer>
+    <!-- Fixed Ambient Glow Mesh Background -->
+    <div class="ambient-mesh" aria-hidden="true">
+        <div class="orb orb-1"></div>
+        <div class="orb orb-2"></div>
+        <div class="orb orb-3"></div>
     </div>
+    <div class="noise-overlay" aria-hidden="true"></div>
 
-    <!-- Toast Component -->
-    <div id="toast" class="toast">
-        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#34d399" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+    <main class="stage">
+        <!-- Fluid Floating Island Navbar (Detached from Top) -->
+        <header class="nav-island-wrapper">
+            <nav class="nav-island" aria-label="Main Navigation">
+                <a href="/" class="nav-brand">
+                    <div class="brand-gem">⚡</div>
+                    <span class="brand-label">STREAM BOT</span>
+                </a>
+                <div class="nav-divider" aria-hidden="true"></div>
+                <div class="nav-status">
+                    <span class="pulse-dot" aria-hidden="true"></span>
+                    <span>Edge CDN Active</span>
+                </div>
+                {% if updates_channel %}
+                <div class="nav-divider" aria-hidden="true"></div>
+                <a href="https://t.me/{{ updates_channel | replace('@', '') }}" target="_blank" rel="noopener" class="nav-channel-link">
+                    <span>{{ updates_channel }}</span>
+                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                        <line x1="7" y1="17" x2="17" y2="7"></line>
+                        <polyline points="7 7 17 7 17 17"></polyline>
+                    </svg>
+                </a>
+                {% endif %}
+            </nav>
+        </header>
+
+        <!-- Media Cinema Viewport (Double-Bezel Hardware Enclosure) -->
+        <section class="double-bezel viewport-shell" aria-label="Media Viewport">
+            <div class="bezel-core viewport-core">
+                {% if mime_type.startswith('image/') %}
+                    <!-- Ultra-Crisp Lightbox Image Viewer -->
+                    <img src="{{ raw_stream_url }}" alt="{{ file_name }}" class="image-display" loading="eager" />
+                {% elif mime_type.startswith('audio/') %}
+                    <!-- Modern Architectural Audio Deck -->
+                    <div class="audio-stage">
+                        <div class="audio-disc-disc"></div>
+                        <audio id="player" playsinline controls preload="metadata" style="width: 100%; max-width: 680px;">
+                            <source src="{{ raw_stream_url }}" type="{{ mime_type }}">
+                            Your browser does not support audio playback.
+                        </audio>
+                    </div>
+                {% elif mime_type.startswith('video/') or file_name.endswith(('.mp4', '.mkv', '.webm', '.avi', '.mov', '.flv', '.ts')) %}
+                    <!-- Cinema Video Player (Plyr Engine) -->
+                    <video id="player" playsinline controls preload="metadata">
+                        <source src="{{ raw_stream_url }}" type="{{ mime_type }}">
+                        Your browser does not support streaming this video format.
+                    </video>
+                {% elif 'package-archive' in mime_type or file_name.endswith('.apk') %}
+                    <!-- Android APK Architecture Card -->
+                    <div class="document-hero">
+                        <div class="doc-icon-gem">
+                            <svg width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="#10b981" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+                                <rect x="5" y="2" width="14" height="20" rx="3" ry="3"></rect>
+                                <line x1="12" y1="18" x2="12.01" y2="18"></line>
+                            </svg>
+                        </div>
+                        <h2 class="doc-title">{{ file_name }}</h2>
+                        <p class="doc-desc">Android Application Package • Instant High-Speed Direct Delivery</p>
+                    </div>
+                {% elif 'zip' in mime_type or 'rar' in mime_type or file_name.endswith(('.zip', '.rar', '.7z', '.tar', '.gz')) %}
+                    <!-- Archive Architecture Card -->
+                    <div class="document-hero">
+                        <div class="doc-icon-gem">
+                            <svg width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="#8b5cf6" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+                                <path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"></path>
+                                <polyline points="3.27 6.96 12 12.01 20.73 6.96"></polyline>
+                                <line x1="12" y1="22.08" x2="12" y2="12"></line>
+                            </svg>
+                        </div>
+                        <h2 class="doc-title">{{ file_name }}</h2>
+                        <p class="doc-desc">Compressed Archive • Ultra-Fast Chunked Direct Stream</p>
+                    </div>
+                {% else %}
+                    <!-- Universal Document Architecture Card -->
+                    <div class="document-hero">
+                        <div class="doc-icon-gem">
+                            <svg width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="#06b6d4" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+                                <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
+                                <polyline points="14 2 14 8 20 8"></polyline>
+                                <line x1="16" y1="13" x2="8" y2="13"></line>
+                                <line x1="16" y1="17" x2="8" y2="17"></line>
+                            </svg>
+                        </div>
+                        <h2 class="doc-title">{{ file_name }}</h2>
+                        <p class="doc-desc">Document & Digital Media • Multi-Threaded Transmission Ready</p>
+                    </div>
+                {% endif %}
+            </div>
+        </section>
+
+        <!-- Asymmetrical Bento Matrix -->
+        <section class="bento-grid" aria-label="File Information & Controls">
+            <!-- Bento Slot 1: File Identity & Badges (Span 8) -->
+            <div class="double-bezel bento-header">
+                <div class="bezel-core bento-card-inner">
+                    <div class="eyebrow-row">
+                        <span class="eyebrow eyebrow-accent">
+                            <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round">
+                                <polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"></polygon>
+                            </svg>
+                            Edge Verified
+                        </span>
+                        {% if mime_type.startswith('video/') %}
+                            <span class="eyebrow">Video Stream</span>
+                        {% elif mime_type.startswith('audio/') %}
+                            <span class="eyebrow">Hi-Fi Audio</span>
+                        {% elif mime_type.startswith('image/') %}
+                            <span class="eyebrow">High-Res Image</span>
+                        {% elif file_name.endswith('.apk') %}
+                            <span class="eyebrow">Android APK</span>
+                        {% else %}
+                            <span class="eyebrow">Document</span>
+                        {% endif %}
+                        <span class="eyebrow eyebrow-speed">HTTP 206 Partial</span>
+                    </div>
+
+                    <h1 class="file-heading">{{ file_name }}</h1>
+
+                    <div class="file-subtext">
+                        <span>SIZE: {{ formatted_size }}</span>
+                        <span>•</span>
+                        <span>HASH: {{ file_hash }}</span>
+                    </div>
+
+                    <!-- Direct URL Strip with Interactive One-Click Copy -->
+                    <div class="direct-link-shell" title="Direct Stream URL">
+                        <span class="link-text-display" id="directLinkDisplay">{{ download_url }}</span>
+                        <button onclick="copyDownloadUrl()" class="mini-copy-trigger" aria-label="Copy direct download link">
+                            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
+                                <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
+                            </svg>
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Bento Slot 2: Button-in-Button CTA & Actions (Span 4) -->
+            <div class="double-bezel bento-actions">
+                <div class="bezel-core bento-card-inner">
+                    <div class="cta-container">
+                        <!-- Primary Button-in-Button CTA Pill -->
+                        <a href="{{ download_url }}" class="btn-cta-primary" download>
+                            <span>Download ({{ formatted_size }})</span>
+                            <div class="trailing-capsule" aria-hidden="true">
+                                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round">
+                                    <line x1="12" y1="5" x2="12" y2="19"></line>
+                                    <polyline points="19 12 12 19 5 12"></polyline>
+                                </svg>
+                            </div>
+                        </a>
+
+                        <!-- Secondary Copy Action Pill -->
+                        <button onclick="copyDownloadUrl()" class="btn-cta-secondary" type="button">
+                            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
+                                <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
+                            </svg>
+                            <span>Copy Direct Stream URL</span>
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Bento Slot 3: Comprehensive Telemetry Specs Matrix (Span 12) -->
+            <div class="double-bezel bento-telemetry">
+                <div class="bezel-core bento-card-inner" style="padding: 20px;">
+                    <div class="specs-array">
+                        <div class="spec-item">
+                            <span class="spec-label">Payload Size</span>
+                            <span class="spec-value spec-mono">{{ formatted_size }}</span>
+                        </div>
+                        <div class="spec-item">
+                            <span class="spec-label">MIME Protocol</span>
+                            <span class="spec-value spec-mono" title="{{ mime_type }}">{{ mime_type }}</span>
+                        </div>
+                        <div class="spec-item">
+                            <span class="spec-label">Ingested</span>
+                            <span class="spec-value" title="{{ uploaded_date }}">{{ uploaded_date }}</span>
+                        </div>
+                        <div class="spec-item">
+                            <span class="spec-label">Total Views</span>
+                            <span class="spec-value spec-mono">{{ views_count }}</span>
+                        </div>
+                        <div class="spec-item">
+                            <span class="spec-label">Transfers</span>
+                            <span class="spec-value spec-mono">{{ downloads_count }}</span>
+                        </div>
+                        <div class="spec-item">
+                            <span class="spec-label">Network Status</span>
+                            <span class="spec-value spec-active-badge">
+                                <span class="pulse-dot" style="width: 6px; height: 6px;"></span>
+                                Active Node
+                            </span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- Stage Footer -->
+        <footer class="stage-footer">
+            <div class="footer-brand">
+                <span>⚡ STREAM BOT</span>
+                <span>•</span>
+                <span>Hydrogram MTProto Engine</span>
+            </div>
+            <div class="footer-tagline">
+                Zero-Disk Buffer • RAM-Chunk Acceleration
+            </div>
+        </footer>
+    </main>
+
+    <!-- Haptic Toast Component -->
+    <div id="toastBubble" class="toast-bubble" role="status" aria-live="polite">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#10b981" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
             <polyline points="20 6 9 17 4 12"></polyline>
         </svg>
-        <span>Link copied to clipboard!</span>
+        <span>Direct link copied to clipboard</span>
     </div>
 
-    <!-- Plyr JS -->
+    <!-- Plyr Media Player Initialization -->
     <script src="https://cdn.plyr.io/3.7.8/plyr.js"></script>
     <script>
         document.addEventListener('DOMContentLoaded', () => {
@@ -710,10 +1046,24 @@
         });
 
         function copyDownloadUrl() {
-            navigator.clipboard.writeText("{{ download_url }}").then(() => {
-                const toast = document.getElementById('toast');
+            const rawUrl = "{{ download_url }}";
+            navigator.clipboard.writeText(rawUrl).then(() => {
+                const toast = document.getElementById('toastBubble');
                 toast.classList.add('show');
-                setTimeout(() => toast.classList.remove('show'), 2200);
+                setTimeout(() => {
+                    toast.classList.remove('show');
+                }, 2400);
+            }).catch(() => {
+                // Fallback for non-https contexts
+                const input = document.createElement('textarea');
+                input.value = rawUrl;
+                document.body.appendChild(input);
+                input.select();
+                document.execCommand('copy');
+                document.body.removeChild(input);
+                const toast = document.getElementById('toastBubble');
+                toast.classList.add('show');
+                setTimeout(() => toast.classList.remove('show'), 2400);
             });
         }
     </script>
