@@ -1,5 +1,6 @@
 import math
 import logging
+import asyncio
 from typing import AsyncGenerator, Tuple, Optional
 
 logger = logging.getLogger(__name__)
@@ -52,8 +53,9 @@ async def byte_range_chunk_generator(
     file_size: int
 ) -> AsyncGenerator[bytes, None]:
     """
-    Streams file bytes chunk-by-chunk from Telegram MTProto DC,
-    slicing the first and last chunks to match exact byte boundaries.
+    Pipelined chunk streaming generator with prefetching buffer.
+    Fetches subsequent chunks from Telegram MTProto in the background while
+    simultaneously streaming earlier chunks over HTTP to eliminate turnaround latency.
     """
     offset_chunk = start_byte // CHUNK_SIZE
     last_chunk = end_byte // CHUNK_SIZE
@@ -63,16 +65,51 @@ async def byte_range_chunk_generator(
     bytes_to_send = (end_byte - start_byte) + 1
     sent_bytes = 0
 
-    async def _stream_chunks(active_client, active_msg, current_offset, remaining_limit):
-        async for chk in active_client.stream_media(active_msg, offset=current_offset, limit=remaining_limit):
-            yield chk
+    # Pipeline buffer: prefetch up to 3 chunks (~3MB) in RAM
+    queue = asyncio.Queue(maxsize=3)
+    stop_producer = asyncio.Event()
+
+    async def _producer():
+        try:
+            active_msg = message
+            async for chunk in client.stream_media(active_msg, offset=offset_chunk, limit=limit_chunks):
+                if stop_producer.is_set():
+                    break
+                if chunk:
+                    await queue.put(chunk)
+            await queue.put(None)  # End of stream sentinel
+        except Exception as e:
+            if "FILE_REFERENCE_EXPIRED" in str(e) or "FileReferenceExpired" in type(e).__name__:
+                logger.warning("File reference expired in producer. Refreshing message context...")
+                try:
+                    chat_id = message.chat.id
+                    fresh_msg = await client.get_messages(chat_id=chat_id, message_ids=message.id)
+                    if fresh_msg and not stop_producer.is_set():
+                        rem_offset = current_byte // CHUNK_SIZE
+                        rem_limit = max(1, (last_chunk - rem_offset) + 1)
+                        async for chunk in client.stream_media(fresh_msg, offset=rem_offset, limit=rem_limit):
+                            if stop_producer.is_set():
+                                break
+                            if chunk:
+                                await queue.put(chunk)
+                        await queue.put(None)
+                        return
+                except Exception as ref_err:
+                    await queue.put(ref_err)
+                    return
+            await queue.put(e)
+
+    producer_task = asyncio.create_task(_producer())
 
     try:
-        async for chunk in client.stream_media(message, offset=offset_chunk, limit=limit_chunks):
-            if not chunk:
-                continue
+        while sent_bytes < bytes_to_send:
+            item = await queue.get()
+            if item is None:
+                break
+            if isinstance(item, Exception):
+                raise item
 
-            chunk_len = len(chunk)
+            chunk_len = len(item)
             chunk_start = current_byte
             chunk_end = current_byte + chunk_len - 1
 
@@ -80,40 +117,12 @@ async def byte_range_chunk_generator(
             slice_start = max(0, start_byte - chunk_start)
             slice_end = min(chunk_len, (end_byte - chunk_start) + 1)
 
-            part = chunk[slice_start:slice_end]
+            part = item[slice_start:slice_end]
             if part:
                 yield part
                 sent_bytes += len(part)
 
             current_byte += chunk_len
-            if sent_bytes >= bytes_to_send:
-                break
-
-    except Exception as e:
-        if "FILE_REFERENCE_EXPIRED" in str(e) or "FileReferenceExpired" in type(e).__name__:
-            logger.warning("File reference expired during streaming. Refreshing fresh message context from Telegram...")
-            try:
-                chat_id = message.chat.id
-                fresh_msg = await client.get_messages(chat_id=chat_id, message_ids=message.id)
-                if fresh_msg:
-                    new_offset = current_byte // CHUNK_SIZE
-                    new_limit = max(1, (last_chunk - new_offset) + 1)
-                    async for chunk in client.stream_media(fresh_msg, offset=new_offset, limit=new_limit):
-                        if not chunk:
-                            continue
-                        chunk_len = len(chunk)
-                        chunk_start = current_byte
-                        slice_start = max(0, start_byte - chunk_start)
-                        slice_end = min(chunk_len, (end_byte - chunk_start) + 1)
-                        part = chunk[slice_start:slice_end]
-                        if part:
-                            yield part
-                            sent_bytes += len(part)
-                        current_byte += chunk_len
-                        if sent_bytes >= bytes_to_send:
-                            break
-                    return
-            except Exception as refresh_err:
-                logger.error(f"Failed to refresh expired message file reference: {refresh_err}")
-        logger.error(f"Stream generator exception: {e}")
-        raise
+    finally:
+        stop_producer.set()
+        producer_task.cancel()
