@@ -52,7 +52,9 @@ async def watch_player_route(request: web.Request) -> web.Response:
 
     public_base = Config.get_public_url()
     raw_stream_url = f"{public_base}/{file_hash}?stream=1"
-    download_url = f"{public_base}/{file_hash}"
+    import datetime
+    created_ts = file_info.get("created_at") or 0
+    uploaded_date = datetime.datetime.fromtimestamp(created_ts, tz=datetime.timezone.utc).strftime("%b %d, %Y • %H:%M UTC") if created_ts else "Recent"
 
     template = jinja_env.get_template("player.html")
     rendered_html = await template.render_async(
@@ -61,7 +63,11 @@ async def watch_player_route(request: web.Request) -> web.Response:
         mime_type=file_info["mime_type"] or "video/mp4",
         raw_stream_url=raw_stream_url,
         download_url=download_url,
-        updates_channel=Config.UPDATES_CHANNEL
+        updates_channel=Config.UPDATES_CHANNEL,
+        views_count=file_info.get("views_count", 1),
+        downloads_count=file_info.get("downloads_count", 0),
+        uploaded_date=uploaded_date,
+        file_hash=file_hash
     )
 
     return web.Response(text=rendered_html, content_type="text/html")

@@ -441,6 +441,50 @@
             color: #fff;
         }
 
+        /* Detailed Stats Grid */
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(130px, 1fr));
+            gap: 12px;
+            background: rgba(0, 0, 0, 0.25);
+            border: 1px solid rgba(255, 255, 255, 0.05);
+            border-radius: var(--radius-md);
+            padding: 16px;
+        }
+
+        .stat-card {
+            display: flex;
+            flex-direction: column;
+            gap: 4px;
+        }
+
+        .stat-label {
+            font-size: 0.72rem;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+            color: var(--text-dim);
+            font-weight: 600;
+        }
+
+        .stat-val {
+            font-size: 0.92rem;
+            font-weight: 700;
+            color: var(--text-main);
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+
+        .stat-mono {
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 0.82rem;
+            color: #a5b4fc;
+        }
+
+        .stat-active {
+            color: #34d399;
+        }
+
         /* Clean Minimal Footer */
         .footer {
             display: flex;
@@ -570,6 +614,34 @@
                         <span class="chip">📁 Document</span>
                     {% endif %}
                     <span class="chip chip-speed">⚡ Multi-Bot Accelerated</span>
+                </div>
+            </div>
+
+            <!-- Detailed File Metadata Stats Grid -->
+            <div class="stats-grid">
+                <div class="stat-card">
+                    <span class="stat-label">📁 File Size</span>
+                    <span class="stat-val">{{ formatted_size }}</span>
+                </div>
+                <div class="stat-card">
+                    <span class="stat-label">🏷️ MIME Type</span>
+                    <span class="stat-val stat-mono">{{ mime_type }}</span>
+                </div>
+                <div class="stat-card">
+                    <span class="stat-label">📅 Uploaded On</span>
+                    <span class="stat-val">{{ uploaded_date }}</span>
+                </div>
+                <div class="stat-card">
+                    <span class="stat-label">👁️ Total Views</span>
+                    <span class="stat-val">{{ views_count }}</span>
+                </div>
+                <div class="stat-card">
+                    <span class="stat-label">📥 Total Downloads</span>
+                    <span class="stat-val">{{ downloads_count }}</span>
+                </div>
+                <div class="stat-card">
+                    <span class="stat-label">⚡ Stream Status</span>
+                    <span class="stat-val stat-active">🟢 Active Edge</span>
                 </div>
             </div>
 

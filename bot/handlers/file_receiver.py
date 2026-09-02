@@ -24,6 +24,10 @@ CATEGORY_EMOJIS = {
     (filters.private | filters.channel)
 )
 async def media_file_handler(client: Client, message: Message):
+    # Prevent duplicate loops if message arrives from the storage channel itself
+    if Config.BIN_CHANNEL != 0 and message.chat and message.chat.id == Config.BIN_CHANNEL:
+        return
+
     media, file_name, file_size, mime_type, file_unique_id, category, is_streamable = extract_media(message)
     if not media:
         return
