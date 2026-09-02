@@ -52,6 +52,7 @@ async def watch_player_route(request: web.Request) -> web.Response:
 
     public_base = Config.get_public_url()
     raw_stream_url = f"{public_base}/{file_hash}?stream=1"
+    download_url = f"{public_base}/{file_hash}"
     import datetime
     created_ts = file_info.get("created_at") or 0
     uploaded_date = datetime.datetime.fromtimestamp(created_ts, tz=datetime.timezone.utc).strftime("%b %d, %Y • %H:%M UTC") if created_ts else "Recent"
