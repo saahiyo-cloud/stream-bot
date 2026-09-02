@@ -1045,13 +1045,42 @@
         document.addEventListener('DOMContentLoaded', () => {
             const playerElem = document.querySelector('#player');
             if (playerElem) {
-                new Plyr(playerElem, {
+                const player = new Plyr(playerElem, {
                     controls: [
                         'play-large', 'play', 'progress', 'current-time', 'duration',
                         'mute', 'volume', 'captions', 'settings', 'pip', 'airplay', 'fullscreen'
                     ],
                     seekTime: 10,
                     speed: { selected: 1, options: [0.5, 0.75, 1, 1.25, 1.5, 2] }
+                });
+
+                // Smart Playback Resume
+                const resumeKey = 'streambot_playback_{{ file_hash }}';
+                const savedTime = parseFloat(localStorage.getItem(resumeKey));
+
+                player.on('loadedmetadata', () => {
+                    if (savedTime && savedTime > 5) {
+                        player.currentTime = savedTime;
+                        const toast = document.getElementById('toastBubble');
+                        if (toast) {
+                            const mins = Math.floor(savedTime / 60);
+                            const secs = Math.floor(savedTime % 60);
+                            const formatted = `${mins}:${secs < 10 ? '0' : ''}${secs}`;
+                            toast.querySelector('span').textContent = `Resumed playback at ${formatted}`;
+                            toast.classList.add('show');
+                            setTimeout(() => toast.classList.remove('show'), 2600);
+                        }
+                    }
+                });
+
+                player.on('timeupdate', () => {
+                    if (player.currentTime > 5 && (player.duration - player.currentTime) > 10) {
+                        localStorage.setItem(resumeKey, player.currentTime);
+                    }
+                });
+
+                player.on('ended', () => {
+                    localStorage.removeItem(resumeKey);
                 });
             }
         });

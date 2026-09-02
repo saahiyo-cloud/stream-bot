@@ -211,13 +211,17 @@ async def stream_download_route(request: web.Request) -> web.StreamResponse:
     if start_byte == 0:
         await db.increment_downloads(file_hash)
 
+    # Active worker pool for concurrent multi-bot chunk downloading
+    active_clients = [bot] + bot.worker_clients
+
     try:
         async for chunk in byte_range_chunk_generator(
             client=stream_client,
             message=msg,
             start_byte=start_byte,
             end_byte=end_byte,
-            file_size=file_size
+            file_size=file_size,
+            clients=active_clients
         ):
             await response.write(chunk)
 

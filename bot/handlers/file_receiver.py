@@ -1,4 +1,5 @@
 import logging
+import urllib.parse
 from hydrogram import Client, filters
 from hydrogram.types import Message, InlineKeyboardMarkup, InlineKeyboardButton
 from bot.database.db import db
@@ -93,6 +94,9 @@ async def media_file_handler(client: Client, message: Message):
             await status_msg.edit_text(reply_text)
             return
 
+        share_target = stream_url if is_streamable else download_url
+        share_url = f"https://t.me/share/url?url={urllib.parse.quote(share_target)}&text={urllib.parse.quote(f'⚡ {file_name} ({formatted_size})')}"
+
         if is_streamable:
             # Streamable Media (Video, Audio, Image)
             reply_text = (
@@ -114,11 +118,11 @@ async def media_file_handler(client: Client, message: Message):
                     InlineKeyboardButton("🚀 Download Now", url=download_url),
                     InlineKeyboardButton("🎬 Watch Online", url=stream_url)
                 ])
-                second_row = []
+                second_row = [InlineKeyboardButton("📤 Share Link", url=share_url)]
                 if Config.UPDATES_CHANNEL:
-                    second_row.append(InlineKeyboardButton("🛠 Updates Channel", url=f"https://t.me/{Config.UPDATES_CHANNEL.lstrip('@')}"))
-                second_row.append(InlineKeyboardButton("❌ Close", callback_data="close_data"))
+                    second_row.append(InlineKeyboardButton("🛠 Channel", url=f"https://t.me/{Config.UPDATES_CHANNEL.lstrip('@')}"))
                 buttons.append(second_row)
+                buttons.append([InlineKeyboardButton("❌ Close", callback_data="close_data")])
             else:
                 first_row = [InlineKeyboardButton("ℹ️ Localhost Link Note", callback_data="local_note")]
                 if Config.UPDATES_CHANNEL:
@@ -142,11 +146,11 @@ async def media_file_handler(client: Client, message: Message):
             buttons = []
             if not is_local:
                 buttons.append([InlineKeyboardButton("🚀 Download File", url=download_url)])
-                second_row = []
+                second_row = [InlineKeyboardButton("📤 Share Link", url=share_url)]
                 if Config.UPDATES_CHANNEL:
-                    second_row.append(InlineKeyboardButton("🛠 Updates Channel", url=f"https://t.me/{Config.UPDATES_CHANNEL.lstrip('@')}"))
-                second_row.append(InlineKeyboardButton("❌ Close", callback_data="close_data"))
+                    second_row.append(InlineKeyboardButton("🛠 Channel", url=f"https://t.me/{Config.UPDATES_CHANNEL.lstrip('@')}"))
                 buttons.append(second_row)
+                buttons.append([InlineKeyboardButton("❌ Close", callback_data="close_data")])
             else:
                 first_row = [InlineKeyboardButton("ℹ️ Localhost Link Note", callback_data="local_note")]
                 if Config.UPDATES_CHANNEL:

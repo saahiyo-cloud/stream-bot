@@ -45,71 +45,93 @@ def parse_range_header(range_header: Optional[str], file_size: int) -> Tuple[int
     return start, end, True
 
 
+async def fetch_single_chunk(client, message, chunk_index: int, fallback_client=None) -> bytes:
+    """
+    Fetches a single 1MB chunk from Telegram MTProto with automatic fallback to primary client.
+    """
+    try:
+        async for chunk in client.stream_media(message, offset=chunk_index, limit=1):
+            if chunk:
+                return chunk
+        return b""
+    except Exception as e:
+        if fallback_client and fallback_client != client:
+            logger.debug(f"Worker client failed for chunk {chunk_index}: {e}. Retrying via primary bot...")
+            async for chunk in fallback_client.stream_media(message, offset=chunk_index, limit=1):
+                if chunk:
+                    return chunk
+        raise
+
+
 async def byte_range_chunk_generator(
     client,
     message,
     start_byte: int,
     end_byte: int,
-    file_size: int
+    file_size: int,
+    clients=None
 ) -> AsyncGenerator[bytes, None]:
     """
-    Pipelined chunk streaming generator with prefetching buffer.
-    Fetches subsequent chunks from Telegram MTProto in the background while
-    simultaneously streaming earlier chunks over HTTP to eliminate turnaround latency.
+    Multi-bot parallel chunk streaming generator.
+    Distributes consecutive chunks across all available bot workers in parallel,
+    multiplying download throughput for both single and multi-threaded transfers.
     """
+    if clients and isinstance(clients, list) and len(clients) > 0:
+        worker_pool = clients
+    elif isinstance(client, list) and len(client) > 0:
+        worker_pool = client
+    else:
+        worker_pool = [client]
+
+    primary_client = worker_pool[0]
+    num_workers = len(worker_pool)
+
     offset_chunk = start_byte // CHUNK_SIZE
     last_chunk = end_byte // CHUNK_SIZE
-    limit_chunks = (last_chunk - offset_chunk) + 1
+    total_chunks = (last_chunk - offset_chunk) + 1
 
     current_byte = offset_chunk * CHUNK_SIZE
     bytes_to_send = (end_byte - start_byte) + 1
     sent_bytes = 0
 
-    # Pipeline buffer: prefetch up to 3 chunks (~3MB) in RAM
-    queue = asyncio.Queue(maxsize=3)
-    stop_producer = asyncio.Event()
-
-    async def _producer():
-        try:
-            active_msg = message
-            async for chunk in client.stream_media(active_msg, offset=offset_chunk, limit=limit_chunks):
-                if stop_producer.is_set():
-                    break
-                if chunk:
-                    await queue.put(chunk)
-            await queue.put(None)  # End of stream sentinel
-        except Exception as e:
-            if "FILE_REFERENCE_EXPIRED" in str(e) or "FileReferenceExpired" in type(e).__name__:
-                logger.warning("File reference expired in producer. Refreshing message context...")
-                try:
-                    chat_id = message.chat.id
-                    fresh_msg = await client.get_messages(chat_id=chat_id, message_ids=message.id)
-                    if fresh_msg and not stop_producer.is_set():
-                        rem_offset = current_byte // CHUNK_SIZE
-                        rem_limit = max(1, (last_chunk - rem_offset) + 1)
-                        async for chunk in client.stream_media(fresh_msg, offset=rem_offset, limit=rem_limit):
-                            if stop_producer.is_set():
-                                break
-                            if chunk:
-                                await queue.put(chunk)
-                        await queue.put(None)
-                        return
-                except Exception as ref_err:
-                    await queue.put(ref_err)
-                    return
-            await queue.put(e)
-
-    producer_task = asyncio.create_task(_producer())
+    # Sliding window prefetch size: keep up to 2 chunks per active worker in-flight
+    window_size = min(max(3, num_workers * 2), 6)
+    tasks = {}
 
     try:
-        while sent_bytes < bytes_to_send:
-            item = await queue.get()
-            if item is None:
-                break
-            if isinstance(item, Exception):
-                raise item
+        # Pre-seed initial sliding window with concurrent fetch tasks
+        for i in range(min(window_size, total_chunks)):
+            chunk_idx = offset_chunk + i
+            assigned_client = worker_pool[chunk_idx % num_workers]
+            tasks[chunk_idx] = asyncio.create_task(
+                fetch_single_chunk(assigned_client, message, chunk_idx, fallback_client=primary_client)
+            )
 
-            chunk_len = len(item)
+        next_chunk = offset_chunk
+        while next_chunk <= last_chunk:
+            # Await next in-order chunk
+            task = tasks.pop(next_chunk, None)
+            if task is None:
+                assigned_client = worker_pool[next_chunk % num_workers]
+                task = asyncio.create_task(
+                    fetch_single_chunk(assigned_client, message, next_chunk, fallback_client=primary_client)
+                )
+
+            chunk = await task
+
+            # Schedule the next chunk to keep the prefetch pipeline full
+            next_to_schedule = next_chunk + window_size
+            if next_to_schedule <= last_chunk and next_to_schedule not in tasks:
+                assigned_client = worker_pool[next_to_schedule % num_workers]
+                tasks[next_to_schedule] = asyncio.create_task(
+                    fetch_single_chunk(assigned_client, message, next_to_schedule, fallback_client=primary_client)
+                )
+
+            if not chunk:
+                next_chunk += 1
+                continue
+
+            chunk_len = len(chunk)
             chunk_start = current_byte
             chunk_end = current_byte + chunk_len - 1
 
@@ -117,12 +139,19 @@ async def byte_range_chunk_generator(
             slice_start = max(0, start_byte - chunk_start)
             slice_end = min(chunk_len, (end_byte - chunk_start) + 1)
 
-            part = item[slice_start:slice_end]
+            part = chunk[slice_start:slice_end]
             if part:
                 yield part
                 sent_bytes += len(part)
 
             current_byte += chunk_len
+            if sent_bytes >= bytes_to_send:
+                break
+
+            next_chunk += 1
+
     finally:
-        stop_producer.set()
-        producer_task.cancel()
+        # Cancel all remaining prefetch tasks when stream ends or client aborts
+        for t in tasks.values():
+            if not t.done():
+                t.cancel()
