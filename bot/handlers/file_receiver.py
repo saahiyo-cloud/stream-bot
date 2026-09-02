@@ -66,9 +66,21 @@ async def media_file_handler(client: Client, message: Message):
         formatted_size = human_readable_size(file_size)
         category_label = CATEGORY_EMOJIS.get(category, "📁 File")
 
-        # Check if URL is local or public
+        # Check if URL is valid for Telegram InlineKeyboardButton
+        has_valid_url = base_url.startswith("http://") or base_url.startswith("https://")
         is_local = "localhost" in base_url or "127.0.0.1" in base_url
         footer_channel = f"\n\n🛠 **Join {Config.UPDATES_CHANNEL} for latest updates!**" if Config.UPDATES_CHANNEL else ""
+
+        if not has_valid_url:
+            # Fallback when SERVER_URL is not set yet
+            reply_text = (
+                "⚠️ **Server Domain Not Configured!**\n\n"
+                f"📁 **Name:** `{file_name}`\n"
+                f"📦 **Size:** `{formatted_size}`\n\n"
+                "Please configure `SERVER_URL` (e.g. `https://your-domain.up.railway.app`) in your environment variables to generate public stream & download links."
+            )
+            await status_msg.edit_text(reply_text)
+            return
 
         if is_streamable:
             # Streamable Media (Video, Audio, Image)
@@ -118,9 +130,7 @@ async def media_file_handler(client: Client, message: Message):
 
             buttons = []
             if not is_local:
-                buttons.append([
-                    InlineKeyboardButton("🚀 Download File", url=download_url)
-                ])
+                buttons.append([InlineKeyboardButton("🚀 Download File", url=download_url)])
                 second_row = []
                 if Config.UPDATES_CHANNEL:
                     second_row.append(InlineKeyboardButton("🛠 Updates Channel", url=f"https://t.me/{Config.UPDATES_CHANNEL.lstrip('@')}"))
