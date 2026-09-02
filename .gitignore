@@ -1,18 +1,38 @@
-# Python
+# Byte-compiled / optimized / DLL files
 __pycache__/
 *.py[cod]
 *$py.class
+
+# Telegram session files & SQLite databases
 *.session
 *.session-journal
 *.db
+*.sqlite3
 stream_bot.db
-.env
 
-# Node & Build artifacts
+# Environment variables & secrets
+.env
+.env.local
+.env.*.local
+
+# Virtual environments
+venv/
+.venv/
+env/
+ENV/
+
+# Node & Cloudflare Worker artifacts
 node_modules/
 dist/
 .wrangler/
 
-# System
+# Logs & scratch files
+*.log
+scratch/
+.system_generated/
+
+# OS & IDE artifacts
 .DS_Store
 Thumbs.db
+.vscode/
+.idea/
