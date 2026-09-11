@@ -191,7 +191,8 @@ async def stream_download_route(request: web.Request) -> web.StreamResponse:
         "Access-Control-Allow-Origin": "*",
         "Access-Control-Allow-Headers": "Range, Content-Type",
         "Access-Control-Expose-Headers": "Content-Range, Content-Length, Accept-Ranges",
-        "Cache-Control": "public, max-age=86400"
+        "Cache-Control": "public, max-age=86400",
+        "X-Content-Type-Options": "nosniff"
     }
 
     if is_range:
@@ -202,6 +203,19 @@ async def stream_download_route(request: web.Request) -> web.StreamResponse:
 
     response = web.StreamResponse(status=status_code, headers=headers)
     await response.prepare(request)
+
+    # Disable Nagle's algorithm for faster chunk delivery (avoid TCP small-write buffering)
+    transport = response._payload_writer.transport if hasattr(response, '_payload_writer') else None
+    if transport and hasattr(transport, 'set_write_buffer_limits'):
+        transport.set_write_buffer_limits(low=0, high=0)
+    try:
+        if transport:
+            sock = transport.get_extra_info('socket')
+            if sock:
+                import socket
+                sock.setsockopt(socket.IPPROTO_TCP, socket.TCP_NODELAY, 1)
+    except Exception:
+        pass  # Non-critical optimization
 
     # If HEAD request (e.g. IDM / curl -I / aria2 checking file info), return headers immediately
     if request.method == "HEAD":
