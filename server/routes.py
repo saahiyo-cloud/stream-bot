@@ -202,7 +202,14 @@ async def stream_download_route(request: web.Request) -> web.StreamResponse:
         status_code = 200
 
     response = web.StreamResponse(status=status_code, headers=headers)
-    await response.prepare(request)
+    try:
+        await response.prepare(request)
+    except (ConnectionResetError, asyncio.CancelledError):
+        return response
+    except Exception as prep_err:
+        if "ClientConnectionResetError" in type(prep_err).__name__:
+            return response
+        raise
 
     # Disable Nagle's algorithm for faster chunk delivery (avoid TCP small-write buffering)
     transport = response._payload_writer.transport if hasattr(response, '_payload_writer') else None
@@ -226,7 +233,8 @@ async def stream_download_route(request: web.Request) -> web.StreamResponse:
         await db.increment_downloads(file_hash)
 
     # Active worker pool for concurrent multi-bot chunk downloading
-    active_clients = [bot] + bot.worker_clients
+    # Put stream_client first as it's already verified to have the message
+    active_clients = [stream_client] + [c for c in ([bot] + bot.worker_clients) if c != stream_client]
 
     try:
         async for chunk in byte_range_chunk_generator(
@@ -235,7 +243,9 @@ async def stream_download_route(request: web.Request) -> web.StreamResponse:
             start_byte=start_byte,
             end_byte=end_byte,
             file_size=file_size,
-            clients=active_clients
+            clients=active_clients,
+            chat_id=chat_id,
+            message_id=message_id,
         ):
             await response.write(chunk)
 
@@ -244,7 +254,10 @@ async def stream_download_route(request: web.Request) -> web.StreamResponse:
         # Client aborted playback, scrubbed video, or disconnected
         pass
     except Exception as e:
-        logger.error(f"Error while streaming response: {e}")
+        if "ClientConnectionResetError" in type(e).__name__:
+            pass
+        else:
+            logger.error(f"Error while streaming response: {e}")
 
     return response
 
