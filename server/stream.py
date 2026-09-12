@@ -159,85 +159,51 @@ async def _single_client_stream(
 #  PARALLEL MULTI-CLIENT STREAMING  (verified multi-worker pool)
 # ──────────────────────────────────────────────────────────────────────
 
-async def _worker_download_segment(
-    worker_id: int,
+async def fetch_single_chunk(
     client,
     message,
-    seg_offset: int,
-    seg_limit: int,
-    global_seq_start: int,
-    output_queue: asyncio.Queue,
-    stop_event: asyncio.Event,
+    chunk_index: int,
     fallback_client=None,
     fallback_message=None,
     chat_id=None,
     message_id=None,
-):
+) -> bytes:
     """
-    Downloads a contiguous segment of chunks using a verified MTProto client session.
-    If the worker encounters any failure, transparently rescues remaining chunks
-    using fallback_client so the HTTP stream never breaks.
+    Fetches a single 1MB chunk from Telegram MTProto using a verified client session.
+    Automatically refreshes file references and falls back to primary client if needed.
     """
-    seq = global_seq_start
-    prod_offset = seg_offset
-    chunks_left = seg_limit
-
     try:
-        async for chunk in client.stream_media(message, offset=seg_offset, limit=seg_limit):
-            if stop_event.is_set():
-                return
+        async for chunk in client.stream_media(message, offset=chunk_index, limit=1):
             if chunk:
-                await output_queue.put((seq, chunk))
-                seq += 1
-                prod_offset += 1
-                chunks_left -= 1
-
+                return chunk
+        return b""
     except Exception as e:
-        if stop_event.is_set() or chunks_left <= 0:
-            return
-
         is_ref_expired = (
             "FILE_REFERENCE_EXPIRED" in str(e)
             or "FileReferenceExpired" in type(e).__name__
         )
-
-        # 1. Try in-place refresh on the worker client
         if is_ref_expired:
-            logger.warning(f"Worker {worker_id}: file reference expired at chunk seq={seq}. Refreshing...")
+            logger.warning(f"Worker {getattr(client, 'name', 'worker')}: file reference expired on chunk {chunk_index}. Refreshing...")
             fresh_msg = await _refresh_message(client, message, chat_id=chat_id, message_id=message_id)
-            if fresh_msg and not stop_event.is_set():
+            if fresh_msg:
                 try:
-                    async for chunk in client.stream_media(fresh_msg, offset=prod_offset, limit=chunks_left):
-                        if stop_event.is_set():
-                            return
+                    async for chunk in client.stream_media(fresh_msg, offset=chunk_index, limit=1):
                         if chunk:
-                            await output_queue.put((seq, chunk))
-                            seq += 1
-                            prod_offset += 1
-                            chunks_left -= 1
-                    return
+                            return chunk
                 except Exception as retry_err:
-                    logger.warning(f"Worker {worker_id} retry failed: {retry_err}")
+                    logger.warning(f"Worker retry on chunk {chunk_index} failed: {retry_err}")
 
-        # 2. Resiliency fallback: Rescue remaining chunks with fallback_client
-        if fallback_client and fallback_message and chunks_left > 0 and not stop_event.is_set():
-            logger.warning(f"Worker {worker_id} failed ({e}). Rescuing remaining {chunks_left} chunks via primary client...")
+        # Failover rescue: download chunk via primary bot
+        if fallback_client and fallback_client != client and fallback_message:
+            logger.warning(f"Worker {getattr(client, 'name', 'worker')} failed on chunk {chunk_index} ({e}). Rescuing with primary bot...")
             try:
-                async for chunk in fallback_client.stream_media(fallback_message, offset=prod_offset, limit=chunks_left):
-                    if stop_event.is_set():
-                        return
+                async for chunk in fallback_client.stream_media(fallback_message, offset=chunk_index, limit=1):
                     if chunk:
-                        await output_queue.put((seq, chunk))
-                        seq += 1
-                        prod_offset += 1
-                        chunks_left -= 1
-                return
+                        return chunk
             except Exception as fb_err:
-                logger.error(f"Fallback rescue for Worker {worker_id} failed: {fb_err}")
-
-        # 3. Only if rescue also failed, propagate error to queue
-        logger.error(f"Worker {worker_id} segment download failed: {e}")
-        await output_queue.put((seq, e))
+                logger.error(f"Fallback rescue on chunk {chunk_index} failed: {fb_err}")
+                raise fb_err
+        raise e
 
 
 async def _parallel_multi_client_stream(
@@ -251,9 +217,10 @@ async def _parallel_multi_client_stream(
     message_id=None,
 ) -> AsyncGenerator[bytes, None]:
     """
-    High-throughput parallel chunk streamer.
-    Splits the requested byte range into segments, assigns each to a verified
-    MTProto client session with its own valid Message object, and reassembles in order.
+    High-throughput interleaved sliding-window parallel streamer.
+    Interleaves consecutive chunks across all verified bot workers simultaneously.
+    Keeps multiple concurrent chunks in-flight across all workers so all bot sessions
+    download concurrently 100% of the time.
     """
     offset_chunk = start_byte // CHUNK_SIZE
     last_chunk = end_byte // CHUNK_SIZE
@@ -264,95 +231,75 @@ async def _parallel_multi_client_stream(
     sent_bytes = 0
 
     num_workers = len(verified_workers)
-    prefetch_depth = 8 if file_size >= LARGE_FILE_THRESHOLD else 4
+    # Maintain 3-4 concurrent in-flight chunks per worker to keep all connections saturated
+    window_size = min(max(num_workers * 3, 6), 16)
 
-    output_queue: asyncio.Queue = asyncio.Queue(maxsize=prefetch_depth * num_workers)
-    stop_event = asyncio.Event()
+    logger.info(
+        f"Interleaved parallel download: {total_chunks} chunks across {num_workers} workers "
+        f"(sliding window={window_size} chunks in-flight, file_size={file_size})"
+    )
 
-    base_per_worker = total_chunks // num_workers
-    remainder = total_chunks % num_workers
+    tasks = {}
 
-    worker_tasks = []
-    current_offset = offset_chunk
-    global_seq = 0
-
-    for i, (client, msg) in enumerate(verified_workers):
-        seg_limit = base_per_worker + (1 if i < remainder else 0)
-        if seg_limit <= 0:
-            break
-
-        task = asyncio.create_task(
-            _worker_download_segment(
-                worker_id=i,
-                client=client,
-                message=msg,
-                seg_offset=current_offset,
-                seg_limit=seg_limit,
-                global_seq_start=global_seq,
-                output_queue=output_queue,
-                stop_event=stop_event,
+    def schedule_chunk(chunk_idx):
+        worker_client, worker_msg = verified_workers[chunk_idx % num_workers]
+        return asyncio.create_task(
+            fetch_single_chunk(
+                client=worker_client,
+                message=worker_msg,
+                chunk_index=chunk_idx,
                 fallback_client=fallback_client,
                 fallback_message=fallback_message,
                 chat_id=chat_id,
                 message_id=message_id,
             )
         )
-        worker_tasks.append(task)
-
-        current_offset += seg_limit
-        global_seq += seg_limit
-
-    logger.info(
-        f"Parallel download: {total_chunks} chunks across {len(worker_tasks)} workers "
-        f"(prefetch={prefetch_depth}, file_size={file_size})"
-    )
-
-    next_expected_seq = 0
-    buffered: dict = {}
-    total_expected = total_chunks
 
     try:
-        while sent_bytes < bytes_to_send and next_expected_seq < total_expected:
-            if next_expected_seq in buffered:
-                item = buffered.pop(next_expected_seq)
-            else:
-                try:
-                    seq, item = await asyncio.wait_for(output_queue.get(), timeout=120)
-                except asyncio.TimeoutError:
-                    logger.error("Parallel download timed out waiting for chunk")
-                    break
+        # Pre-seed initial sliding window with concurrent tasks across all workers
+        for i in range(min(window_size, total_chunks)):
+            c_idx = offset_chunk + i
+            tasks[c_idx] = schedule_chunk(c_idx)
 
-                if isinstance(item, Exception):
-                    raise item
+        next_chunk = offset_chunk
+        while next_chunk <= last_chunk:
+            task = tasks.pop(next_chunk, None)
+            if task is None:
+                task = schedule_chunk(next_chunk)
 
-                if seq != next_expected_seq:
-                    buffered[seq] = item
-                    continue
+            chunk = await task
 
-            chunk_len = len(item)
+            # Schedule the next chunk to keep the worker pipeline full
+            next_to_schedule = next_chunk + window_size
+            if next_to_schedule <= last_chunk and next_to_schedule not in tasks:
+                tasks[next_to_schedule] = schedule_chunk(next_to_schedule)
+
+            if not chunk:
+                next_chunk += 1
+                continue
+
+            chunk_len = len(chunk)
             chunk_start = current_byte
             chunk_end = current_byte + chunk_len - 1
 
             slice_start = max(0, start_byte - chunk_start)
             slice_end = min(chunk_len, (end_byte - chunk_start) + 1)
 
-            part = item[slice_start:slice_end]
+            part = chunk[slice_start:slice_end]
             if part:
                 yield part
                 sent_bytes += len(part)
 
             current_byte += chunk_len
-            next_expected_seq += 1
+            if sent_bytes >= bytes_to_send:
+                break
+
+            next_chunk += 1
 
     finally:
-        stop_event.set()
-        for task in worker_tasks:
-            task.cancel()
-        while not output_queue.empty():
-            try:
-                output_queue.get_nowait()
-            except asyncio.QueueEmpty:
-                break
+        for t in tasks.values():
+            if not t.done():
+                t.cancel()
 
 
 # ──────────────────────────────────────────────────────────────────────
