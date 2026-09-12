@@ -590,6 +590,54 @@
             transform: translateY(1px) scale(0.985);
         }
 
+        /* External App Launchers (VLC & MX Player) */
+        .external-players-row {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 8px;
+            margin-top: 2px;
+        }
+
+        .btn-cta-external {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 7px;
+            padding: 10px 14px;
+            border-radius: var(--radius-pill);
+            background: rgba(255, 255, 255, 0.04);
+            border: 1px solid rgba(255, 255, 255, 0.08);
+            color: var(--text-secondary);
+            font-size: 12.5px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.25s var(--spring-fluid);
+            outline: none;
+        }
+
+        .btn-cta-external:hover {
+            background: rgba(255, 255, 255, 0.08);
+            color: var(--text-primary);
+            border-color: rgba(255, 255, 255, 0.16);
+            transform: translateY(-1px);
+        }
+
+        .btn-cta-external.vlc:hover {
+            border-color: rgba(249, 115, 22, 0.5);
+            color: #fb923c;
+            box-shadow: 0 4px 14px -3px rgba(249, 115, 22, 0.25);
+        }
+
+        .btn-cta-external.mx:hover {
+            border-color: rgba(59, 130, 246, 0.5);
+            color: #60a5fa;
+            box-shadow: 0 4px 14px -3px rgba(59, 130, 246, 0.25);
+        }
+
+        .btn-cta-external:active {
+            transform: translateY(1px) scale(0.985);
+        }
+
         /* -------------------------------------------------------------
            DIRECT LINK BAR (Micro-Haptic Copy Architecture)
            ------------------------------------------------------------- */
@@ -978,6 +1026,25 @@
                             </svg>
                             <span>Copy Direct Stream URL</span>
                         </button>
+
+                        {% if mime_type.startswith('video/') or mime_type.startswith('audio/') or file_name.endswith(('.mp4', '.mkv', '.webm', '.avi', '.mov', '.flv', '.ts')) %}
+                        <!-- External App Streaming Intents -->
+                        <div class="external-players-row">
+                            <button onclick="openVLC()" class="btn-cta-external vlc" type="button" title="Open Stream directly in VLC Media Player">
+                                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+                                    <polygon points="12 2 2 22 22 22 12 2"></polygon>
+                                    <line x1="6" y1="16" x2="18" y2="16"></line>
+                                </svg>
+                                <span>Play in VLC</span>
+                            </button>
+                            <button onclick="openMX()" class="btn-cta-external mx" type="button" title="Open Stream directly in MX Player">
+                                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+                                    <polygon points="5 3 19 12 5 21 5 3"></polygon>
+                                </svg>
+                                <span>MX Player</span>
+                            </button>
+                        </div>
+                        {% endif %}
                     </div>
                 </div>
             </div>
@@ -1105,6 +1172,16 @@
                 toast.classList.add('show');
                 setTimeout(() => toast.classList.remove('show'), 2400);
             });
+        }
+
+        function openVLC() {
+            const isAndroid = /Android/i.test(navigator.userAgent);
+            const vlcUrl = isAndroid ? "{{ vlc_intent }}" : "{{ vlc_url }}";
+            window.location.href = vlcUrl;
+        }
+
+        function openMX() {
+            window.location.href = "{{ mx_intent }}";
         }
     </script>
 </body>

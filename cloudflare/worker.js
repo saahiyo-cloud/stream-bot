@@ -2,7 +2,7 @@
  * Cloudflare Worker Reverse Proxy for Telegram Stream & Download Bot
  */
 
-const BACKEND_ORIGIN = "https://saahiyo-stream-bot.hf.space";
+const BACKEND_ORIGIN = "https://streambot.up.railway.app";
 
 export default {
   async fetch(request, env, ctx) {
@@ -16,7 +16,7 @@ export default {
         headers: {
           "Access-Control-Allow-Origin": "*",
           "Access-Control-Allow-Methods": "GET, HEAD, OPTIONS",
-          "Access-Control-Allow-Headers": "Range, Content-Type, Authorization",
+          "Access-Control-Allow-Headers": "Range, Content-Type, Authorization, If-Range, If-None-Match",
           "Access-Control-Max-Age": "86400"
         }
       });
@@ -36,8 +36,8 @@ export default {
 
       const modifiedHeaders = new Headers(response.headers);
       modifiedHeaders.set("Access-Control-Allow-Origin", "*");
-      modifiedHeaders.set("Access-Control-Allow-Headers", "Range, Content-Type");
-      modifiedHeaders.set("Access-Control-Expose-Headers", "Content-Range, Content-Length, Accept-Ranges, Content-Disposition");
+      modifiedHeaders.set("Access-Control-Allow-Headers", "Range, Content-Type, Authorization, If-Range, If-None-Match");
+      modifiedHeaders.set("Access-Control-Expose-Headers", "Content-Range, Content-Length, Accept-Ranges, ETag, Last-Modified, Content-Disposition");
       modifiedHeaders.set("X-Served-By", "Cloudflare-Edge-Streamer");
 
       return new Response(response.body, {

@@ -1,4 +1,6 @@
 import asyncio
+import datetime
+import email.utils
 import logging
 import urllib.parse
 from pathlib import Path
@@ -117,17 +119,26 @@ async def watch_player_route(request: web.Request) -> web.Response:
     public_base = Config.get_public_url()
     raw_stream_url = f"{public_base}/{file_hash}?stream=1"
     download_url = f"{public_base}/{file_hash}?download=1"
-    import datetime
+
     created_ts = file_info.get("created_at") or 0
     uploaded_date = datetime.datetime.fromtimestamp(created_ts, tz=datetime.timezone.utc).strftime("%b %d, %Y • %H:%M UTC") if created_ts else "Recent"
+
+    mime_type = file_info["mime_type"] or "video/mp4"
+    # External media player URLs (VLC & MX Player intents)
+    vlc_url = f"vlc://{raw_stream_url}"
+    vlc_intent = f"intent:{raw_stream_url}#Intent;package=org.videolan.vlc;type={mime_type};scheme=https;end"
+    mx_intent = f"intent:{raw_stream_url}#Intent;package=com.mxtech.videoplayer.ad;type={mime_type};scheme=https;end"
 
     template = jinja_env.get_template("player.html")
     rendered_html = await template.render_async(
         file_name=file_info["file_name"] or "Media File",
         formatted_size=human_readable_size(file_info["file_size"]),
-        mime_type=file_info["mime_type"] or "video/mp4",
+        mime_type=mime_type,
         raw_stream_url=raw_stream_url,
         download_url=download_url,
+        vlc_url=vlc_url,
+        vlc_intent=vlc_intent,
+        mx_intent=mx_intent,
         updates_channel=Config.UPDATES_CHANNEL,
         views_count=file_info.get("views_count", 1),
         downloads_count=file_info.get("downloads_count", 0),
@@ -155,6 +166,23 @@ async def stream_download_route(request: web.Request) -> web.StreamResponse:
     # Check range header
     range_header = request.headers.get("Range")
     start_byte, end_byte, is_range = parse_range_header(range_header, file_size)
+
+    # HTTP Caching & Validation headers (ETag & Last-Modified)
+    file_hash_etag = f'"{file_hash}"'
+    created_ts = file_info.get("created_at") or 0
+    last_modified_str = email.utils.formatdate(created_ts, usegmt=True) if created_ts else None
+
+    # Conditional GET support: 304 Not Modified if not a partial range request
+    if_none_match = request.headers.get("If-None-Match")
+    if if_none_match and if_none_match.strip() == file_hash_etag and not is_range:
+        return web.Response(
+            status=304,
+            headers={
+                "ETag": file_hash_etag,
+                "Cache-Control": "public, max-age=86400",
+                "Access-Control-Allow-Origin": "*",
+            }
+        )
 
     # Get worker client from pool for load balancing
     stream_client = bot.get_stream_client()
@@ -189,11 +217,14 @@ async def stream_download_route(request: web.Request) -> web.StreamResponse:
         "Content-Length": str(content_length),
         "Content-Disposition": f'{disposition}; filename="{clean_filename}"; filename*=UTF-8\'\'{safe_filename}',
         "Access-Control-Allow-Origin": "*",
-        "Access-Control-Allow-Headers": "Range, Content-Type",
-        "Access-Control-Expose-Headers": "Content-Range, Content-Length, Accept-Ranges",
+        "Access-Control-Allow-Headers": "Range, Content-Type, If-Range, If-None-Match",
+        "Access-Control-Expose-Headers": "Content-Range, Content-Length, Accept-Ranges, ETag, Last-Modified, Content-Disposition",
         "Cache-Control": "public, max-age=86400",
+        "ETag": file_hash_etag,
         "X-Content-Type-Options": "nosniff"
     }
+    if last_modified_str:
+        headers["Last-Modified"] = last_modified_str
 
     if is_range:
         headers["Content-Range"] = f"bytes {start_byte}-{end_byte}/{file_size}"

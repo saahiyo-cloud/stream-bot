@@ -8,8 +8,14 @@ class Database:
         self.db_path = db_path
         self._conn = None
 
+    def _connect(self):
+        return aiosqlite.connect(self.db_path, timeout=10.0)
+
     async def init_db(self):
-        async with aiosqlite.connect(self.db_path) as db:
+        async with self._connect() as db:
+            await db.execute("PRAGMA journal_mode = WAL;")
+            await db.execute("PRAGMA synchronous = NORMAL;")
+            await db.execute("PRAGMA busy_timeout = 10000;")
             await db.execute("""
                 CREATE TABLE IF NOT EXISTS files (
                     id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -39,7 +45,7 @@ class Database:
 
     async def add_file(self, file_hash: str, message_id: int, file_name: str, file_size: int,
                        mime_type: str, file_unique_id: str, user_id: int) -> int:
-        async with aiosqlite.connect(self.db_path) as db:
+        async with self._connect() as db:
             cursor = await db.execute("""
                 INSERT OR REPLACE INTO files 
                 (file_hash, message_id, file_name, file_size, mime_type, file_unique_id, user_id, created_at)
@@ -49,7 +55,7 @@ class Database:
             return cursor.lastrowid
 
     async def get_file_by_hash(self, file_hash: str):
-        async with aiosqlite.connect(self.db_path) as db:
+        async with self._connect() as db:
             db.row_factory = aiosqlite.Row
             cursor = await db.execute("SELECT * FROM files WHERE file_hash = ?", (file_hash,))
             row = await cursor.fetchone()
@@ -60,7 +66,7 @@ class Database:
     async def get_file_by_unique_id(self, file_unique_id: str):
         if not file_unique_id:
             return None
-        async with aiosqlite.connect(self.db_path) as db:
+        async with self._connect() as db:
             db.row_factory = aiosqlite.Row
             cursor = await db.execute("SELECT * FROM files WHERE file_unique_id = ? ORDER BY id DESC LIMIT 1", (file_unique_id,))
             row = await cursor.fetchone()
@@ -69,17 +75,17 @@ class Database:
             return None
 
     async def increment_views(self, file_hash: str):
-        async with aiosqlite.connect(self.db_path) as db:
+        async with self._connect() as db:
             await db.execute("UPDATE files SET views_count = views_count + 1 WHERE file_hash = ?", (file_hash,))
             await db.commit()
 
     async def increment_downloads(self, file_hash: str):
-        async with aiosqlite.connect(self.db_path) as db:
+        async with self._connect() as db:
             await db.execute("UPDATE files SET downloads_count = downloads_count + 1 WHERE file_hash = ?", (file_hash,))
             await db.commit()
 
     async def add_user(self, user_id: int, first_name: str, username: str):
-        async with aiosqlite.connect(self.db_path) as db:
+        async with self._connect() as db:
             await db.execute("""
                 INSERT OR IGNORE INTO users (user_id, first_name, username, joined_at)
                 VALUES (?, ?, ?, ?)
@@ -87,7 +93,7 @@ class Database:
             await db.commit()
 
     async def get_stats(self):
-        async with aiosqlite.connect(self.db_path) as db:
+        async with self._connect() as db:
             cursor = await db.execute("SELECT COUNT(*) FROM files")
             total_files = (await cursor.fetchone())[0]
 
