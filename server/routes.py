@@ -249,12 +249,17 @@ async def stream_download_route(request: web.Request) -> web.StreamResponse:
         ):
             await response.write(chunk)
 
-        await response.write_eof()
-    except (ConnectionResetError, web.HTTPException, asyncio.CancelledError):
-        # Client aborted playback, scrubbed video, or disconnected
+        try:
+            await response.write_eof()
+        except Exception:
+            pass
+    except (ConnectionError, ConnectionResetError, web.HTTPException, asyncio.CancelledError):
+        # Client aborted playback, scrubbed video, paused, or disconnected
         pass
     except Exception as e:
-        if "ClientConnectionResetError" in type(e).__name__:
+        err_str = str(e).lower()
+        err_type = type(e).__name__.lower()
+        if "connection" in err_str or "connection" in err_type or "cannot write to closing transport" in err_str:
             pass
         else:
             logger.error(f"Error while streaming response: {e}")
