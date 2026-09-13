@@ -3,6 +3,7 @@ import os
 import mimetypes
 import secrets
 import string
+from typing import Optional, Tuple
 from bot.config import Config
 
 # Initialize mimetypes
@@ -31,6 +32,11 @@ def generate_file_hash(message_id: int) -> str:
     return f"{prefix}{entropy}{message_id}"
 
 
+def generate_access_token(length: int = 16) -> str:
+    """Generate a cryptographically secure per-file access token."""
+    return secrets.token_urlsafe(length)
+
+
 VIDEO_EXTS = {".mp4", ".mkv", ".webm", ".avi", ".mov", ".wmv", ".flv", ".ts", ".m4v", ".3gp", ".vob", ".mpg", ".mpeg"}
 AUDIO_EXTS = {".mp3", ".m4a", ".flac", ".wav", ".aac", ".opus", ".ogg", ".wma", ".mka"}
 IMAGE_EXTS = {".jpg", ".jpeg", ".png", ".webp", ".gif", ".bmp", ".svg", ".ico", ".tiff"}
@@ -40,13 +46,13 @@ DOCUMENT_EXTS = {".pdf", ".epub", ".mobi", ".docx", ".doc", ".xlsx", ".pptx", ".
 SOFTWARE_EXTS = {".exe", ".msi", ".dmg", ".pkg", ".deb", ".rpm"}
 
 
-def classify_media_type(file_name: str, raw_mime: str, raw_type: str):
+def classify_media_type(file_name: str, raw_mime: Optional[str], raw_type: Optional[str]) -> Tuple[str, str, bool]:
     """
     Intelligently determines file category, accurate MIME type, and whether
     the file is streamable (video/audio/image) or a downloadable document/app.
     """
     ext = os.path.splitext(file_name)[1].lower() if file_name else ""
-    mime_type = raw_mime
+    mime_type = raw_mime or ""
 
     # 1. Video Detection (even if sent uncompressed as Document)
     if raw_type == "video" or raw_type == "animation" or ext in VIDEO_EXTS or (mime_type and mime_type.startswith("video/")):

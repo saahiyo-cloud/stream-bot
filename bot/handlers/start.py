@@ -17,11 +17,11 @@ def get_start_buttons():
     ]
 
 
-@Client.on_message(filters.command("start") & filters.private)
+@Client.on_message(filters.command("start") & filters.private)  # pyright: ignore
 async def start_handler(client: Client, message: Message):
     user = message.from_user
     if user:
-        await db.add_user(user.id, user.first_name, user.username or "")
+        await db.add_user(user.id, user.first_name or "", user.username or "")
 
     text = (
         f"👋 **Hello {message.from_user.mention if message.from_user else 'there'}!**\n\n"
@@ -39,7 +39,7 @@ async def start_handler(client: Client, message: Message):
     )
 
 
-@Client.on_message(filters.command("help") & filters.private)
+@Client.on_message(filters.command("help") & filters.private)  # pyright: ignore
 async def help_handler(client: Client, message: Message):
     text = (
         "📖 **How to Use This Bot:**\n\n"
@@ -63,7 +63,7 @@ async def help_handler(client: Client, message: Message):
     )
 
 
-@Client.on_message(filters.command("stats") & filters.private)
+@Client.on_message(filters.command("stats") & filters.private)  # pyright: ignore
 async def stats_handler(client: Client, message: Message):
     stats = await db.get_stats()
     text = (
@@ -76,7 +76,7 @@ async def stats_handler(client: Client, message: Message):
     await message.reply_text(text)
 
 
-@Client.on_callback_query()
+@Client.on_callback_query()  # pyright: ignore
 async def callback_handler(client: Client, query: CallbackQuery):
     data = query.data
 

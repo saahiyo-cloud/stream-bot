@@ -1,10 +1,11 @@
 import logging
+import time
 import urllib.parse
 from hydrogram import Client, filters
 from hydrogram.types import Message, InlineKeyboardMarkup, InlineKeyboardButton
 from bot.database.db import db
 from bot.config import Config
-from bot.utils import human_readable_size, generate_file_hash, extract_media
+from bot.utils import human_readable_size, generate_file_hash, generate_access_token, extract_media
 
 logger = logging.getLogger(__name__)
 
@@ -20,8 +21,8 @@ CATEGORY_EMOJIS = {
 }
 
 
-@Client.on_message(
-    (filters.document | filters.video | filters.audio | filters.animation | filters.voice | filters.photo) &
+@Client.on_message(  # type: ignore
+    (filters.document | filters.video | filters.audio | filters.animation | filters.voice | filters.photo) &  # pyright: ignore
     (filters.private | filters.channel)
 )
 async def media_file_handler(client: Client, message: Message):
@@ -33,33 +34,60 @@ async def media_file_handler(client: Client, message: Message):
     if not media:
         return
 
+    # Normalize loosely typed Telegram values for the strict DB layer.
+    file_name = str(file_name or f"file_{message.id}")
+    file_size = int(file_size or 0)
+    mime_type = str(mime_type or "application/octet-stream")
+    file_unique_id = str(file_unique_id or message.id)
+    category = str(category or "document")
+
     # Track user in DB
     user_id = message.from_user.id if message.from_user else (message.sender_chat.id if message.sender_chat else 0)
     if message.from_user:
-        await db.add_user(user_id, message.from_user.first_name, message.from_user.username or "")
+        await db.add_user(user_id, message.from_user.first_name or "", message.from_user.username or "")
 
     # Processing status indicator
     status_msg = await message.reply_text("⚡ **Generating ultra-fast link...**", quote=True)
 
     try:
+        # Initialize security fields so they're always bound (used by dedup path too)
+        access_token = None
+        expires_at = None
+
         # Check if file has already been stored (deduplication by file_unique_id)
         existing_file = await db.get_file_by_unique_id(file_unique_id)
         if existing_file:
             logger.info(f"Duplicate media detected (unique_id: {file_unique_id}). Reusing hash {existing_file['file_hash']}")
             file_hash = existing_file["file_hash"]
             storage_msg_id = existing_file["message_id"]
+            access_token = existing_file.get("access_token")
+            expires_at = existing_file.get("expires_at")
+            # Backfill security fields for legacy records so the shared link stays valid
+            if Config.LINK_TOKEN and not access_token:
+                access_token = generate_access_token()
+                await db.update_file_security(file_hash, access_token=access_token)
+            if Config.LINK_EXPIRY_DAYS > 0 and not expires_at:
+                expires_at = int(time.time()) + Config.LINK_EXPIRY_DAYS * 86400
+                await db.update_file_security(file_hash, expires_at=expires_at)
         else:
             # Save file reference to BIN_CHANNEL for permanent storage
             storage_msg_id = message.id
             if Config.BIN_CHANNEL != 0:
                 try:
                     forwarded_msg = await message.copy(chat_id=Config.BIN_CHANNEL)
-                    storage_msg_id = forwarded_msg.id
+                    if isinstance(forwarded_msg, list):
+                        storage_msg_id = forwarded_msg[0].id if forwarded_msg else message.id
+                    else:
+                        storage_msg_id = forwarded_msg.id
                 except Exception as copy_err:
                     logger.warning(f"Could not forward to BIN_CHANNEL ({Config.BIN_CHANNEL}): {copy_err}. Falling back to direct message ID.")
 
             # Generate unique vanity file hash
             file_hash = generate_file_hash(storage_msg_id)
+
+            # Generate per-file security token & optional expiry timestamp
+            access_token = generate_access_token() if Config.LINK_TOKEN else None
+            expires_at = int(time.time()) + Config.LINK_EXPIRY_DAYS * 86400 if Config.LINK_EXPIRY_DAYS > 0 else None
 
             # Store record in database
             await db.add_file(
@@ -69,12 +97,15 @@ async def media_file_handler(client: Client, message: Message):
                 file_size=file_size,
                 mime_type=mime_type,
                 file_unique_id=file_unique_id,
-                user_id=user_id
+                user_id=user_id,
+                access_token=access_token,
+                expires_at=expires_at
             )
 
         base_url = Config.get_public_url()
-        stream_url = f"{base_url}/watch/{file_hash}"
-        download_url = f"{base_url}/{file_hash}?download=1"
+        token_q = f"?token={access_token}" if access_token else ""
+        stream_url = f"{base_url}/watch/{file_hash}{token_q}"
+        download_url = f"{base_url}/{file_hash}?download=1" + (f"&token={access_token}" if access_token else "")
         formatted_size = human_readable_size(file_size)
         category_label = CATEGORY_EMOJIS.get(category, "📁 File")
 

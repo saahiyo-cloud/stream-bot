@@ -63,3 +63,8 @@ class Config:
     # Hash prefix for vanity URLs (e.g. stream-...)
     HASH_PREFIX = os.getenv("HASH_PREFIX", "stream-").strip()
 
+    # Link security: per-file secret access token auth (1=on, 0=off)
+    LINK_TOKEN = _get_int("LINK_TOKEN", 1) == 1
+    # Link expiration in days (0 = links never expire)
+    LINK_EXPIRY_DAYS = _get_int("LINK_EXPIRY_DAYS", 0)
+

@@ -1,5 +1,6 @@
 import aiosqlite
 import time
+from typing import Optional
 from bot.config import Config
 
 
@@ -28,7 +29,9 @@ class Database:
                     user_id INTEGER,
                     created_at INTEGER,
                     views_count INTEGER DEFAULT 0,
-                    downloads_count INTEGER DEFAULT 0
+                    downloads_count INTEGER DEFAULT 0,
+                    access_token TEXT,
+                    expires_at INTEGER
                 )
             """)
             await db.execute("""
@@ -39,20 +42,37 @@ class Database:
                     joined_at INTEGER
                 )
             """)
+            # Migrate legacy databases that lack the security columns
+            cursor = await db.execute("PRAGMA table_info(files)")
+            existing_cols = {row[1] for row in await cursor.fetchall()}
+            if "access_token" not in existing_cols:
+                await db.execute("ALTER TABLE files ADD COLUMN access_token TEXT")
+            if "expires_at" not in existing_cols:
+                await db.execute("ALTER TABLE files ADD COLUMN expires_at INTEGER")
             await db.execute("CREATE INDEX IF NOT EXISTS idx_file_hash ON files(file_hash)")
             await db.execute("CREATE INDEX IF NOT EXISTS idx_file_unique_id ON files(file_unique_id)")
             await db.commit()
 
     async def add_file(self, file_hash: str, message_id: int, file_name: str, file_size: int,
-                       mime_type: str, file_unique_id: str, user_id: int) -> int:
+                       mime_type: str, file_unique_id: str, user_id: int,
+                       access_token: Optional[str] = None, expires_at: Optional[int] = None) -> int:
         async with self._connect() as db:
             cursor = await db.execute("""
                 INSERT OR REPLACE INTO files 
-                (file_hash, message_id, file_name, file_size, mime_type, file_unique_id, user_id, created_at)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-            """, (file_hash, message_id, file_name, file_size, mime_type, file_unique_id, user_id, int(time.time())))
+                (file_hash, message_id, file_name, file_size, mime_type, file_unique_id, user_id, created_at, access_token, expires_at)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """, (file_hash, message_id, file_name, file_size, mime_type, file_unique_id, user_id,
+                  int(time.time()), access_token, expires_at))
             await db.commit()
-            return cursor.lastrowid
+            return int(cursor.lastrowid or 0)
+
+    async def update_file_security(self, file_hash: str, access_token: Optional[str] = None, expires_at: Optional[int] = None):
+        async with self._connect() as db:
+            if access_token is not None:
+                await db.execute("UPDATE files SET access_token = ? WHERE file_hash = ?", (access_token, file_hash))
+            if expires_at is not None:
+                await db.execute("UPDATE files SET expires_at = ? WHERE file_hash = ?", (expires_at, file_hash))
+            await db.commit()
 
     async def get_file_by_hash(self, file_hash: str):
         async with self._connect() as db:
@@ -63,7 +83,7 @@ class Database:
                 return dict(row)
             return None
 
-    async def get_file_by_unique_id(self, file_unique_id: str):
+    async def get_file_by_unique_id(self, file_unique_id: Optional[str]):
         if not file_unique_id:
             return None
         async with self._connect() as db:
@@ -95,13 +115,16 @@ class Database:
     async def get_stats(self):
         async with self._connect() as db:
             cursor = await db.execute("SELECT COUNT(*) FROM files")
-            total_files = (await cursor.fetchone())[0]
+            row = await cursor.fetchone()
+            total_files = row[0] if row else 0
 
             cursor = await db.execute("SELECT COUNT(*) FROM users")
-            total_users = (await cursor.fetchone())[0]
+            row = await cursor.fetchone()
+            total_users = row[0] if row else 0
 
             cursor = await db.execute("SELECT SUM(file_size) FROM files")
-            total_size = (await cursor.fetchone())[0] or 0
+            row = await cursor.fetchone()
+            total_size = (row[0] if row and row[0] is not None else 0)
 
             return {
                 "total_files": total_files,

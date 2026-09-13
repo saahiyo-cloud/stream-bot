@@ -94,6 +94,8 @@ Benchmarked on production Railway instances with 8 active Telegram bot workers:
 | `OWNER_ID` | `0` | Telegram user ID of the bot administrator |
 | `UPDATES_CHANNEL` | _(empty)_ | Telegram updates channel username (e.g. `@MyChannel`) |
 | `HASH_PREFIX` | `stream-` | Prefix used for generated stream vanity URLs |
+| `LINK_TOKEN` | `1` | Per-file secret access token required in stream/download URLs. `1` = enabled (links carry `?token=<secret>`; requests without it return `403`). `0` = disabled |
+| `LINK_EXPIRY_DAYS` | `0` | Number of days before generated links expire. `0` = never expire. When set, links older than the window return `403` |
 
 ---
 

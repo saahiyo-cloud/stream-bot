@@ -2,6 +2,8 @@ import asyncio
 import datetime
 import email.utils
 import logging
+import secrets
+import time
 import urllib.parse
 from pathlib import Path
 from aiohttp import web
@@ -10,7 +12,7 @@ from jinja2 import Environment, FileSystemLoader
 from bot.config import Config
 from bot.database.db import db
 from bot.client import bot
-from bot.utils import human_readable_size, extract_media
+from bot.utils import human_readable_size, generate_access_token, extract_media
 from server.stream import parse_range_header, byte_range_chunk_generator
 
 logger = logging.getLogger(__name__)
@@ -49,6 +51,10 @@ async def get_or_recover_file(file_hash: str):
 
                         if msg and not getattr(msg, "empty", False):
                             media, file_name, file_size, mime_type, file_unique_id, category, is_streamable = extract_media(msg)
+                            file_name = str(file_name or f"file_{message_id}")
+                            file_size = int(file_size or 0)
+                            mime_type = str(mime_type or "application/octet-stream")
+                            file_unique_id = str(file_unique_id or message_id)
                             if media and file_size:
                                 await db.add_file(
                                     file_hash=file_hash,
@@ -57,13 +63,61 @@ async def get_or_recover_file(file_hash: str):
                                     file_size=file_size,
                                     mime_type=mime_type,
                                     file_unique_id=file_unique_id,
-                                    user_id=0
+                                    user_id=0,
+                                    access_token=generate_access_token() if Config.LINK_TOKEN else None,
+                                    expires_at=int(time.time()) + Config.LINK_EXPIRY_DAYS * 86400 if Config.LINK_EXPIRY_DAYS > 0 else None
                                 )
                                 logger.info(f"Auto-recovered file metadata for {file_hash} (msg_id: {message_id}) from Telegram storage")
                                 return await db.get_file_by_hash(file_hash)
                     except Exception as e:
                         logger.warning(f"Could not auto-recover {file_hash} from storage channel: {e}")
     return None
+
+
+async def _ensure_file_security(file_info: dict) -> dict:
+    """
+    Guarantee a legacy/DB record has an access token and/or expiry timestamp
+    if link security is enabled, persisting the generated values back to the DB.
+    """
+    changed = False
+    if Config.LINK_TOKEN and not file_info.get("access_token"):
+        file_info["access_token"] = generate_access_token()
+        changed = True
+    if Config.LINK_EXPIRY_DAYS > 0 and not file_info.get("expires_at"):
+        file_info["expires_at"] = int(time.time()) + Config.LINK_EXPIRY_DAYS * 86400
+        changed = True
+    if changed:
+        await db.update_file_security(
+            file_hash=file_info["file_hash"],
+            access_token=file_info.get("access_token"),
+            expires_at=file_info.get("expires_at"),
+        )
+    return file_info
+
+
+def _is_file_access_valid(file_info: dict, request: web.Request) -> bool:
+    """Validate the per-file access token and optional expiry against the request."""
+    # Token check (constant-time comparison to prevent timing attacks)
+    if Config.LINK_TOKEN and file_info.get("access_token"):
+        provided = request.query.get("token")
+        if not provided or not secrets.compare_digest(provided, file_info["access_token"]):
+            return False
+
+    # Expiry check
+    if Config.LINK_EXPIRY_DAYS > 0:
+        exp = file_info.get("expires_at")
+        if exp and int(time.time()) > int(exp):
+            return False
+
+    return True
+
+
+def _append_token(url: str, token=None) -> str:
+    """Append the access token query parameter to a URL."""
+    if not token:
+        return url
+    sep = "&" if "?" in url else "?"
+    return f"{url}{sep}token={token}"
 
 
 async def home_route(request: web.Request) -> web.Response:
@@ -114,11 +168,16 @@ async def watch_player_route(request: web.Request) -> web.Response:
     if not file_info:
         raise web.HTTPNotFound(text="File not found or expired.")
 
+    file_info = await _ensure_file_security(file_info)
+    if not _is_file_access_valid(file_info, request):
+        raise web.HTTPForbidden(text="Invalid or expired access token.")
+
     await db.increment_views(file_hash)
 
     public_base = Config.get_public_url()
-    raw_stream_url = f"{public_base}/{file_hash}?stream=1"
-    download_url = f"{public_base}/{file_hash}?download=1"
+    access_token = file_info.get("access_token")
+    raw_stream_url = _append_token(f"{public_base}/{file_hash}?stream=1", access_token)
+    download_url = _append_token(f"{public_base}/{file_hash}?download=1", access_token)
 
     created_ts = file_info.get("created_at") or 0
     uploaded_date = datetime.datetime.fromtimestamp(created_ts, tz=datetime.timezone.utc).strftime("%b %d, %Y • %H:%M UTC") if created_ts else "Recent"
@@ -157,6 +216,11 @@ async def stream_download_route(request: web.Request) -> web.StreamResponse:
     file_info = await get_or_recover_file(file_hash)
     if not file_info:
         raise web.HTTPNotFound(text="Requested file was not found.")
+
+    # Enforce per-file token auth & optional link expiry
+    file_info = await _ensure_file_security(file_info)
+    if not _is_file_access_valid(file_info, request):
+        raise web.HTTPForbidden(text="Invalid or expired access token.")
 
     file_size = file_info["file_size"]
     file_name = file_info["file_name"] or f"file_{file_hash}"
@@ -243,8 +307,9 @@ async def stream_download_route(request: web.Request) -> web.StreamResponse:
         raise
 
     # Disable Nagle's algorithm for faster chunk delivery (avoid TCP small-write buffering)
-    transport = response._payload_writer.transport if hasattr(response, '_payload_writer') else None
-    if transport and hasattr(transport, 'set_write_buffer_limits'):
+    payload_writer = getattr(response, "_payload_writer", None)
+    transport = getattr(payload_writer, "transport", None)
+    if transport is not None and hasattr(transport, "set_write_buffer_limits"):
         transport.set_write_buffer_limits(low=0, high=0)
     try:
         if transport:
